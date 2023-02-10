@@ -4,6 +4,11 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <RTCZero.h>
+/* Aragnoid: 
+Tame that tractor project
+Code to interface RTKsimple2b to an ARAG 400 to provide RTK precision GPS to a closed ecosystem sprayer
+*/
+
 
 /* Create an rtc object */
 RTCZero rtc;
@@ -77,15 +82,14 @@ void setup() {
   rtc.setSeconds(0);
   
   //test parsing and fill global coordinates
-  char* testmsg;
-  testGPGGA= "$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63";
+  char* testGPGGA= "$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63";
   parseGPGGA(testGPGGA);
 
-  testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
-  parseGPGGA(testGNVTG);
+  char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
+  parseGNVTG(testGNVTG);
 
-  testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
-  parseGPGGA(testGPZDA);
+  char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
+  parseGPZDA(testGPZDA);
 
 }
 
@@ -171,6 +175,66 @@ void updatetime(){
   Month=rtc.getMonth();
   Year=rtc.getYear();
 }
+void parseARAGcommands(const char* msg){
+  //react to ARAG commands
+  if (strcmp(msg,"\xAAD\x12\x1C\x04")) {
+    Serial.println("Receive binary message from Arag, ignoring it");
+    //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
+    // statements
+  }
+  else if (strcmp(msg,"log versiona once")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial1.println("#VERSIONA,COM1,0,56.0,FINESTEERING,2248,51929.543,00000000,3681,9603;3,GPSCARD,\"N1GA\",\"DEL13280066\",\"MCAGTP-3.01-22B\",\"3.906\",\"3.002\",\"2013/Mar/14\",\"14:22:01\",DB_USERAPPAUTO,\"SmartAg\",\"0\",\"\",\"1.101\",\"\",\"2011/Sep/29\",\"17:13:55\",USERINFO,\"No BT\",\"\",\"\",\"\",\"\",\"\",\"\"*0cd69629");
+    Serial.println("Receive version request from Arag");
+    // statements
+  }
+  else if (strcmp(msg,"unlogall com1 true") or strcmp(msg,"unlogall com2 true")){
+    //do nothing
+    delay(1);
+  }
+  else if (strcmp(msg,"nmeatalker auto")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive nmeatalker auto from Arag");
+  }
+  else if (strcmp(msg,"log com1 gpggalong ontime 0.1")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive log gpggalong from Arag");
+  }
+  else if (strcmp(msg,"log com1 gpvtg ontime 0.1")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive log gpvtg from Arag");
+  }
+  else if (strcmp(msg,"log com1 gpzda ontime 1")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive log gpzda from Arag");
+  }
+  else if (strcmp(msg,"log com1 tiltdatab ontime 1")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive log tiltdatab from Arag");
+  }
+  else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial1.println("\r\n$PMDT,<,Tilt sensor not installed\r\n");
+    Serial.println("Receive log PMDT from Arag");
+  }
+  else if (strcmp(msg,"pdpfilter enable")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive pdpfilter enable from Arag");
+  }
+  else if (strcmp(msg,"pdpmode relative auto")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive pdpmode relative from Arag");
+  }
+  else if (strcmp(msg,"sbascontrol disable")){
+    Serial1.println("\r\n<OK\r\n[COM1]");
+    Serial.println("Receive sbascontrol disable from Arag");
+  }
+  else{
+    Serial.println("Received unknown message from Arag:");
+     Serial.println(msg);
+  }
+}
+
 
 void parseGPGGA(const char * msg)
 {
