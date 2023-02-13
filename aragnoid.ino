@@ -61,8 +61,14 @@ int dt3=60;
 int dt4=17;
 int dt5=8;
 bool toggle=true;
+bool ready=false;
+int cnt=0;
+unsigned long lastTime=0;
+int cntzda=0;
+
 char msg[128]; //a buffer that will get the msg contents
 
+char buffer[128]; //a buffer to hold incoming serial messages from RTKsimple
 
 
 void setup() {
@@ -91,77 +97,133 @@ void setup() {
   char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
   parseGPZDA(testGPZDA);
 
+  Serial.println("Aragnoid started"); 
+
 }
 
 void loop() {
-    // put your main code here, to run repeatedly:
-    Serial.println("Hello, hello again..."); 
-    //Serial1.println("Hello serial1..."); 
-    Serial1.println("$GPGGA,142513.00,5056.7191290,N,00446.6237365,E,1,14,0.8,25.600,M,45.50,M,,*61");
-    delay(dt1);
-    Serial1.println("$GNVTG,235.738,T,235.738,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.20,5056.7191154,N,00446.6237248,E,1,14,0.8,25.578,M,45.50,M,,*6F");
-    delay(dt1);
-    Serial1.println("$GNVTG,238.603,T,238.603,M,0.001,N,0.003,K,A*3F");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.30,5056.7191167,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*6F");
-    delay(dt1);
-    Serial1.println("$GNVTG,14.744,T,14.744,M,0.006,N,0.012,K,A*38");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.40,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*67");
-    delay(dt1);
-    Serial1.println("$GNVTG,14.745,T,14.745,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.50,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*66");
-    delay(dt1);
-    Serial1.println("$GNVTG,14.744,T,14.744,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.60,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*65");
-    delay(dt1);
-    Serial1.println("$GNVTG,149.847,T,149.847,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142513.60,5056.7191269,N,00446.6237367,E,1,14,0.8,25.601,M,45.50,M,,*62");
-    delay(dt1);
-    Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.70,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*64");
-    delay(dt1);
-    Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.80,5056.7191167,N,00446.6237265,E,1,14,0.8,25.576,M,45.50,M,,*64");
-    delay(dt1);
-    Serial1.println("$GNVTG,110.297,T,110.297,M,0.000,N,0.001,K,A*3C");
-    delay(dt);
-    Serial1.println("$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63");
-    delay(dt1);
-    Serial1.println("$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E");
-    delay(dt4);
-    Serial1.println("$GPZDA,142436.00,05,02,2023,,*64");
-    byte binmsg[]= {0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20,
-                    0x38,0x00,0x00,0x00,0x6E,0xB4,0xC8,0x08,
-                    0xF0,0xD6,0x17,0x03,0x00,0x00,0x00,0x00,
-                    0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00,
+
+    //read incoming stream from rtksimple
+    if (ready)
+    {
+        //did we get a ASCII message?
+        if (buffer[0]=='$'){
+          if (parseGPGGA(buffer)>1){
+            Serial.println("GPGGA parsed");
+           
+          }
+          else if (parseGNVTG(buffer)>1){
+            Serial.println("GNVTG parsed");
+            
+          }
+          else if (parseGPZDA(buffer)>1){
+            Serial.println("GPZDA parsed");
+            
+          }
+          else {
+            Serial.println("Unable to parse message:");
+            Serial.println(buffer);
+          }
+        }
+        else {
+          Serial.println("A binary message, ignoring");
+
+        }
+        ready = false;
+    } else while (Serial.available())
+    {
+        char c = Serial.read();
+        buffer[cnt++] = c;
+        if ((c == '\n') || (cnt == sizeof(buffer)-1))
+        {
+            buffer[cnt] = '\0';
+            cnt = 0;
+            ready = true;
+        }
+    }
+
+    //send to ARAG
+    if ( millis() - lastTime > 100){
+      sendnmea(GPGGA(msg)); //10Hz
+      sendnmea(GNVTG(msg)); //10Hz
+      lastTime=millis();
+      cntzda++;
+      if (cntzda>9){
+          sendnmea(GPZDA(msg)); //1 Hz
+          cntzda=0;
+      }
+    }
+    
+
+    
+
+    //Serial1.println("$GPGGA,142513.00,5056.7191290,N,00446.6237365,E,1,14,0.8,25.600,M,45.50,M,,*61");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,235.738,T,235.738,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.20,5056.7191154,N,00446.6237248,E,1,14,0.8,25.578,M,45.50,M,,*6F");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,238.603,T,238.603,M,0.001,N,0.003,K,A*3F");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.30,5056.7191167,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*6F");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,14.744,T,14.744,M,0.006,N,0.012,K,A*38");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.40,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*67");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,14.745,T,14.745,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.50,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*66");
+   // delay(dt1);
+    //Serial1.println("$GNVTG,14.744,T,14.744,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.60,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*65");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,149.847,T,149.847,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142513.60,5056.7191269,N,00446.6237367,E,1,14,0.8,25.601,M,45.50,M,,*62");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.70,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*64");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.80,5056.7191167,N,00446.6237265,E,1,14,0.8,25.576,M,45.50,M,,*64");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,110.297,T,110.297,M,0.000,N,0.001,K,A*3C");
+    //delay(dt);
+    //Serial1.println("$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63");
+    //delay(dt1);
+    //Serial1.println("$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E");
+    //delay(dt4);
+    //Serial1.println("$GPZDA,142436.00,05,02,2023,,*64");
+
+    //binary message, lsb first, see NOVATEL description of NMEA protocol
+  /*
+    byte binmsg[]= {0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
+                    0x38,0x00,0x00,0x00,0x6E,0xB4,0xC8,0x08, //msg length=0x3800=56 bytes, sequence id=0, idle time=0x6E, time status 0xB4=180=FINESTEERING, gps ref week=0xC808                   0xF0,0xD6,0x17,0x03,0x00,0x00,0x00,0x00,
+                    0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00, //GPSec=0xF3168325, 
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x4A,0xFA,0x2C,0x3F};
+                    0x00,0x00,0x00,0x00,0x4A,0xFA,0x2C,0x3F}; //last 4 bytes is CRC32 checksum
     Serial1.write(binmsg,sizeof(binmsg)); 
     delay(dt4);
-
+*/
     digitalWrite(LED_BUILTIN, toggle); 
     toggle=!toggle;
     
     //send out to ARAG
-    sendnmea(GPGGA(msg));
-    sendnmea(GNVTG(msg));
-    sendnmea(GPZDA(msg));
+    //sendnmea(GPGGA(msg));
+    //sendnmea(GNVTG(msg));
+    //sendnmea(GPZDA(msg));
   
     //update time
-    updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
+    //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 }
 
 void updatetime(){
@@ -180,6 +242,8 @@ void parseARAGcommands(const char* msg){
   if (strcmp(msg,"\xAAD\x12\x1C\x04")) {
     Serial.println("Receive binary message from Arag, ignoring it");
     //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
+    //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
+    
     // statements
   }
   else if (strcmp(msg,"log versiona once")){
@@ -236,10 +300,10 @@ void parseARAGcommands(const char* msg){
 }
 
 
-void parseGPGGA(const char * msg)
+const int parseGPGGA(const char * msg)
 {
   int chk=0;
-  int n=sscanf(msg,"$GPGGA,%s.%s,%s.%s,%c,%s.%s,%c,%d,%d,%s.%s,%s.%s,%c,%s.%s,%c,%d,%4s*%d",
+  const int n=sscanf(msg,"$GPGGA,%s.%s,%s.%s,%c,%s.%s,%c,%d,%d,%s.%s,%s.%s,%c,%s.%s,%c,%d,%4s*%d",
         Time_units,
         Time_dec, //problem, leading zeros matter and an integer doesnt care for them...how to solve this?
         Latitude_units,
@@ -267,13 +331,13 @@ void parseGPGGA(const char * msg)
     }
     //check if all could be read
     //check if checksum was correct?
-    Serial.print(n);
+    return n;
 }
 
-void parseGNVTG(const char * msg)
+const int parseGNVTG(const char * msg)
 {
   int chk=0;
-  int n=sscanf(msg,"$GNVTG,%s.%s,T,%s.%s,M,%s.%s,N,%s.%s,%c*%d",
+  const int n=sscanf(msg,"$GNVTG,%s.%s,T,%s.%s,M,%s.%s,N,%s.%s,%c*%d",
         Tracktrue_units,
         Tracktrue_dec,
         Trackmag_units,
@@ -290,7 +354,8 @@ void parseGNVTG(const char * msg)
     }
     //check if all could be read
     //check if checksum was correct?
-    Serial.print(n);
+    //Serial.print(n);
+    return n;
 }
 
 const char * GNVTG(char * msg){
@@ -310,10 +375,10 @@ const char * GNVTG(char * msg){
   return msg;
 }
 
-void parseGPZDA(const char * msg)
+const int parseGPZDA(const char * msg)
 {
   int chk=0;
-  int n=sscanf(msg,"$GPZDA,%s.%s,%2d,%2d,%4d,,*%d",
+  const int n=sscanf(msg,"$GPZDA,%s.%s,%2d,%2d,%4d,,*%d",
         Time_units,
         Time_dec,
         &Day,
@@ -326,7 +391,9 @@ void parseGPZDA(const char * msg)
     }
     //check if all could be read
     //check if checksum was correct?
-    Serial.print(n);
+    //Serial.print(n);
+    return n;
+
 }
 
 
