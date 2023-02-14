@@ -59,8 +59,8 @@ char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RT
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600); //usb uart
-  while (!Serial)
+  Serial.begin(115200); //usb uart, will spit out debug messages as RTKsimple data is being parsed
+  while (!Serial);
   rtc.begin(); // initialize RTC
   Serial1.begin(115200,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
 
@@ -90,7 +90,7 @@ void setup() {
   n=parseGPZDA(testGPZDA);
   Serial.println(n);
 
-  //Serial.println("Aragnoid started"); 
+  Serial.println("Aragnoid started"); 
 
 }
 
@@ -123,9 +123,9 @@ void loop() {
 
         }
         ready = false;
-    } else while (Serial.available())
+    } else while (mySerial.available()) //read from simpleRTK
     {
-        char c = Serial.read();
+        char c = mySerial.read();
         buffer[cnt++] = c;
         if ((c == '\n') || (cnt == sizeof(buffer)-1))
         {
@@ -136,7 +136,7 @@ void loop() {
     }
 
 
-    //send to ARAG
+    //send to ARAG messages based on the global coordinates that we filled in from the parsed data
     if ( millis() - lastTime > 100){
       GPGGA(msg);
       sendnmea(msg);
@@ -409,11 +409,20 @@ void GPZDA(char * m){
 
 void sendnmea(const char * m)
 {
-  //temporary on Serial for debugging
+  //send to ARAG
+  Serial1.print('$'); //prequel
+  Serial1.print(m); //msg
+  Serial1.print('*'); //sequal
+  Serial1.println(checksum(m), HEX); //convert checksum byte to hex
+
+  //and also to USB for monitoring
   Serial.print('$'); //prequel
   Serial.print(m); //msg
   Serial.print('*'); //sequal
   Serial.println(checksum(m), HEX); //convert checksum byte to hex
+
+
+
   //showtext(msg); //and show on display
 }
 
