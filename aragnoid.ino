@@ -16,59 +16,45 @@ RTCZero rtc;
 //create a serial 2 on pin 1 and 0
 Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the new UART instance assigning it to pin 1 and 0
 
+#define STRINGSINGLE 20
+#define MAXMESSAGESIZE 128
+
 //global coordinates
 //store long and lat as 2 char strings, one for units and another for decimals, we will not do calculations
 //with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
 //this also solves the fact that Arduino has difficulty in dealing with floats in printf and scanf
-char Time_units[20];
-char Time_dec[20];
-char Latitude_units[20];
-char Latitude_dec[20]; //Latitude decimals
+char Time[STRINGSINGLE];
+char Latitude[STRINGSINGLE];
 char NSchar;
-char Longitude_units[20];
-char Longitude_dec[20]; //Longitude decimals
+char Longitude[STRINGSINGLE];
 char EWchar;
-uint Quality,NSat;
-char HDOP_unit[20];
-char HDOP_dec[20];
-char Altitude_units[20];
-char Altitude_dec[20];
+int Quality,NSat;
+char HDOP[STRINGSINGLE];
+char Altitude[STRINGSINGLE];
 char unitchar;
-char HWGS84_units[20];
-char HWGS84_dec[20];
-int DGPSupdate;
-char DGPSid[20];
+char HWGS84[STRINGSINGLE];
+char DGPSupdate[STRINGSINGLE];
+char DGPSid[STRINGSINGLE];
 //VTG
-char Tracktrue_units[20];
-char Tracktrue_dec[20];
-char Trackmag_units[20];
-char Trackmag_dec[20];
-char Knots_units[20];
-char Knots_dec[20];
-char Speed_units[20];
-char Speed_dec[20];
+char Tracktrue[STRINGSINGLE];
+char Trackmag[STRINGSINGLE];
+char Knots[STRINGSINGLE];
+char Speed[STRINGSINGLE];
+char Speedunits='K';
 char Modechar='D';
 //ZDA
 int Day=0;
 int Month=0;
 int Year=0;
 
-
-
-int dt1=5;
-int dt=80;
-int dt3=60;
-int dt4=17;
-int dt5=8;
 bool toggle=true;
 bool ready=false;
 int cnt=0;
 unsigned long lastTime=0;
 int cntzda=0;
 
-
-char msg[128]; //a buffer that will get the msg contents
-char buffer[128]; //a buffer to hold incoming serial messages from RTKsimple
+char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
+char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 
 
 void setup() {
@@ -92,15 +78,15 @@ void setup() {
 
   int n=0;
   //test parsing and fill global coordinates
-  char* testGPGGA= "$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63";
+  const char* testGPGGA= "$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63";
   n=parseGPGGA(testGPGGA);
   Serial.println(n);
 
-  char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
+  const char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
   n=parseGNVTG(testGNVTG);
   Serial.println(n);
 
-  char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
+  const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
   n=parseGPZDA(testGPZDA);
   Serial.println(n);
 
@@ -114,7 +100,7 @@ void loop() {
     if (ready)
     {
         //did we get a ASCII message?
-        /*if (buffer[0]=='$'){
+        if (buffer[0]=='$'){
           if (parseGPGGA(buffer)>1){
             Serial.println("GPGGA parsed");
            
@@ -135,7 +121,7 @@ void loop() {
         else {
           Serial.println("A binary message, ignoring");
 
-        }*/
+        }
         ready = false;
     } else while (Serial.available())
     {
@@ -152,14 +138,19 @@ void loop() {
 
     //send to ARAG
     if ( millis() - lastTime > 100){
-      sendnmea(GPGGA(msg));
+      GPGGA(msg);
+      sendnmea(msg);
       //sendnmea("test"); //10Hz
-      sendnmea(GNVTG(msg)); //10Hz
+      GNVTG(msg);
+      sendnmea(msg); //10Hz
       lastTime=millis();
       cntzda++;
       if (cntzda>9){
-          sendnmea(GPZDA(msg)); //1 Hz
+          GPZDA(msg);
+          sendnmea(msg); //1 Hz
           cntzda=0;
+          digitalWrite(LED_BUILTIN, toggle); 
+          toggle=!toggle;
       }
     }
     
@@ -225,8 +216,8 @@ void loop() {
 */
     digitalWrite(LED_BUILTIN, toggle); 
     toggle=!toggle;
-    Serial.println("arag...");
-    delay(1000);
+    //Serial.println("arag...");
+    //delay(1000);
     //send out to ARAG
     //sendnmea(GPGGA(msg));
     //sendnmea(GNVTG(msg));
@@ -240,9 +231,9 @@ void updatetime(){
   //fill time from a local real time clock running on Arduino
   //in real operation we want the clock to be given by the gps and NOT by the inacurate rtc
   //use only for debugging purposes
-  sprintf(Time_units,"%2d%2d%2d",rtc.getHours(),rtc.getMinutes(),rtc.getSeconds()); //no millisecond in rtc
+  sprintf(Time,"%2d%2d%2d.00",rtc.getHours(),rtc.getMinutes(),rtc.getSeconds()); //no millisecond in rtc
   Serial.print("Time=");
-  Serial.println(Time_units); 
+  Serial.println(Time); 
   Day=rtc.getDay();
   Month=rtc.getMonth();
   Year=rtc.getYear();
@@ -308,172 +299,113 @@ void parseARAGcommands(const char* msg){
      Serial.println(msg);
   }
 }
-
-
 int parseGPGGA(const char * m)
 {
   int chk=0;
-  int n=sscanf(m,"$GPGGA,%s.%s,%s.%s,%c,%s.%s,%c,%d,%d,%s.%s,%s.%s,%c,%s.%s,%c,%d,%4s*%d",
-        Time_units,
-        Time_dec, //problem, leading zeros matter and an integer doesnt care for them...how to solve this?
-        Latitude_units,
-        Latitude_dec,
+  int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%d",
+        Time,
+        Latitude,
         &NSchar,
-        Longitude_units,
-        Longitude_dec,
+        Longitude,
         &EWchar,
         &Quality,
         &NSat,
-        HDOP_unit,
-        HDOP_dec,
-        Altitude_units,
-        Altitude_dec,
+        HDOP,
+        Altitude,
         &unitchar,
-        HWGS84_units,
-        HWGS84_dec,
+        HWGS84,
         &unitchar,
-        &DGPSupdate,
+        DGPSupdate,
         DGPSid,
         &chk
         );
-    if (n!=21) {
-      Serial.println("parsing failed to retrieve all 21 variables");
+    if (n!=15) {
+      Serial.println("parsing failed to retrieve all 15 variables");
+      //12 is also good if DGPS is not on
     }
     //check if all could be read
     //check if checksum was correct?
   return n;
 }
-
-int parseGNVTG(const char * m)
-{
-  int chk=0;
-  int n=sscanf(m,"$GNVTG,%s.%s,T,%s.%s,M,%s.%s,N,%s.%s,%c*%d",
-        Tracktrue_units,
-        Tracktrue_dec,
-        Trackmag_units,
-        Trackmag_dec,
-        Knots_units,
-        Knots_dec,
-        Speed_units,
-        Speed_dec,
-        &Modechar,
-        &chk
-        );
-    if (n!=9) {
-      Serial.println("GNVTG parsing failed to retrieve all 9 variables");
-    }
-    //check if all could be read
-    //check if checksum was correct?
-    //Serial.print(n);
-  return n;
-}
-
-const char * GNVTG(char * m){
-  //prepare GNVTG string
-  //multi constellation
-  //example $GNVTG,139.969,T,139.969,M,0.007,N,0.013,K,D*3D
-  char tracktruestring[20];
-  getstring(tracktruestring,Tracktrue_units,Tracktrue_dec,3);
-  char trackmagstring[20];
-  getstring(trackmagstring,Trackmag_units,Trackmag_dec,3);
-  char knotsstring[20];
-  getstring(knotsstring,Knots_units,Knots_dec,3);
-  char speedstring[20];
-  getstring(speedstring,Speed_units,Speed_dec,3);
-  
-  sprintf(m, "GNVTG,%s,T,%s,M,%s,N,%s,K%c", tracktruestring,trackmagstring,knotsstring,speedstring,Modechar);
-  return m;
-}
-
-int parseGPZDA(const char * m)
-{
-  int chk=0;
-  int n=sscanf(m,"$GPZDA,%s.%s,%2d,%2d,%4d,,*%d",
-        Time_units,
-        Time_dec,
-        &Day,
-        &Month,
-        &Year,
-        &chk
-        );
-    if (n!=6) {
-      Serial.println("GPZDA parsing failed to retrieve all 6 variables");
-    }
-    //check if all could be read
-    //check if checksum was correct?
-    //Serial.print(n);
-  return n;
-
-}
-
-
-const char * GPZDA(char * m){
-  //prepare GPZDA string
-  //$GPZDA,204007.00,13,05,2022,,*62
-  char timestring[20];
-  getstring(timestring,Time_units,Time_dec,2);
-
-  sprintf(m, "GPZDA,%s,%2d,%2d,%4d,,,", timestring, Day,Month,Year);
-  return m;
-}
-
-const char * GPGGA(char * m)
+void GPGGA(char * m)
 {
   //prepare GPGGA msg depending on global position variables 
-  char timestring[20];
-  getstring(timestring,Time_units,Time_dec,2);
-  char latitudestring[20];
-  getstring(latitudestring,Latitude_units,Latitude_dec,4);
-  char longitudestring[20];
-  getstring(longitudestring,Longitude_units,Longitude_dec,4);
-  char hdopstring[20];
-  getstring(hdopstring,HDOP_unit,HDOP_dec,1);
-  char altitudestring[20];
-  getstring(altitudestring,Altitude_units,Altitude_dec,2);
-  char  HWGS84string[20];
-  getstring(HWGS84string,HWGS84_units,HWGS84_dec,2);
-  sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%d,%s", timestring,
-                                                              latitudestring,
+  
+  sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", Time,
+                                                              Latitude,
                                                               NSchar,
-                                                              longitudestring,
+                                                              Longitude,
                                                               EWchar,
                                                               Quality,
                                                               NSat,
-                                                              hdopstring, 
-                                                              altitudestring,
+                                                              HDOP, 
+                                                              Altitude,
                                                               unitchar,
-                                                              HWGS84string,
+                                                              HWGS84,
                                                               unitchar,
                                                               DGPSupdate,
                                                               DGPSid);
   
   //202530.00,5109.0262,N,11401.8407,W,5,40,0.5,1097.36,M,-17.00,M,18,TSTR"; //checksum should be 61
   //mySerial.println(msg);
-  return m;
 }
 
-void getstring(char * str,const char* unit,const char* dec,const int digits)
+int parseGNVTG(const char * m)
 {
-  //Serial.println(unit);
-  //Serial.println(dec);
-/*
-  int origdigit=strlen(dec); //original number of digits
-  char* decdig="00000000000000";
-  int maxdigit=strlen(decdig);
-  strcpy(decdig, dec);
-  if (origdigit>digits){
-    //clip 
-    decdig[origdigit]='\0'; 
-  }
-  else if (digits<maxdigit){
-    //pad zeros, by removing \0 character and put it at higher point in the string
-    decdig[origdigit]='0';
-    decdig[digits]='\0';
-  }
-*/
-  sprintf(str,"%s.%s",unit,dec);
-  //Serial.println(str);
+  int chk=0;
+  int n=sscanf(m,"$GNVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%d",
+        Tracktrue,
+        Trackmag,
+        Knots,
+        Speed,
+        &Speedunits,
+        &Modechar,
+        &chk
+        );
+    if (n!=6) {
+      Serial.println("GNVTG parsing failed to retrieve all 6 variables");
+    }
+    //check if all could be read
+    //check if checksum was correct?
+    //Serial.print(n);
+  return n;
 }
+
+void GNVTG(char * m){
+  //prepare GNVTG string
+  //multi constellation
+  //example $GNVTG,139.969,T,139.969,M,0.007,N,0.013,K,D*3D
+  
+  sprintf(m, "GNVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
+}
+
+int parseGPZDA(const char * m)
+{
+  int chk=0;
+  int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,,*%d",
+        Time,
+        &Day,
+        &Month,
+        &Year,
+        &chk
+        );
+    if (n!=5) {
+      Serial.println("GPZDA parsing failed to retrieve all 5 variables");
+    }
+    //check if all could be read
+    //check if checksum was correct?
+    //Serial.print(n);
+  return n;
+
+}
+
+
+void GPZDA(char * m){
+  //prepare GPZDA string
+  //$GPZDA,204007.00,13,05,2022,,*62
+  sprintf(m, "GPZDA,%s,%2.2d,%2.2d,%4d,,", Time, Day,Month,Year);
+}
+
 
 void sendnmea(const char * m)
 {
