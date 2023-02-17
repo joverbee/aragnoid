@@ -49,12 +49,17 @@ int Year=0;
 
 bool toggle=true;
 bool ready=false;
+bool receivedarag=false;
+
 int cnt=0;
+int cntarag=0;
+
 unsigned long lastTime=0;
 int cntzda=0;
 
 char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
+char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 
 
 void setup() {
@@ -78,7 +83,7 @@ void setup() {
 
   int n=0;
   //test parsing and fill global coordinates
-  const char* testGPGGA= "$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63";
+  const char* testGPGGA= "$GPGGA,142518.90,5056.7191279,N,00446.6237381,E,1,14,0.8,25.593,M,45.50,M,,*67";
   n=parseGPGGA(testGPGGA);
   Serial.println(n);
 
@@ -135,6 +140,27 @@ void loop() {
         }
     }
 
+//listen to ARAG messages during startup
+  if (receivedarag)
+    {
+      //did we get a ASCII message? 
+      parseARAGcommands(bufferarag);
+      receivedarag = false;
+    } else while (Serial1.available()) //read from ARAG
+    {
+        char c = Serial1.read();
+        bufferarag[cntarag++] = c;
+        if ((c == '\n') || (cntarag == sizeof(bufferarag)-1))
+        {
+            bufferarag[cntarag] = '\0';
+            cntarag = 0;
+            receivedarag = true;
+        }
+    }
+
+
+
+
 
     //send to ARAG messages based on the global coordinates that we filled in from the parsed data
     if ( millis() - lastTime > 100){
@@ -148,85 +174,30 @@ void loop() {
       if (cntzda>9){
           GPZDA(msg);
           sendnmea(msg); //1 Hz
+          sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
           cntzda=0;
           digitalWrite(LED_BUILTIN, toggle); 
           toggle=!toggle;
       }
     }
     
+    //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
+}
 
-    
-
-    //Serial1.println("$GPGGA,142513.00,5056.7191290,N,00446.6237365,E,1,14,0.8,25.600,M,45.50,M,,*61");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,235.738,T,235.738,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.20,5056.7191154,N,00446.6237248,E,1,14,0.8,25.578,M,45.50,M,,*6F");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,238.603,T,238.603,M,0.001,N,0.003,K,A*3F");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.30,5056.7191167,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*6F");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,14.744,T,14.744,M,0.006,N,0.012,K,A*38");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.40,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*67");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,14.745,T,14.745,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.50,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*66");
-   // delay(dt1);
-    //Serial1.println("$GNVTG,14.744,T,14.744,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.60,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*65");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,149.847,T,149.847,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142513.60,5056.7191269,N,00446.6237367,E,1,14,0.8,25.601,M,45.50,M,,*62");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.70,5056.7191168,N,00446.6237257,E,1,14,0.8,25.577,M,45.50,M,,*64");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,14.739,T,14.739,M,0.000,N,0.000,K,A*3D");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.80,5056.7191167,N,00446.6237265,E,1,14,0.8,25.576,M,45.50,M,,*64");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,110.297,T,110.297,M,0.000,N,0.001,K,A*3C");
-    //delay(dt);
-    //Serial1.println("$GPGGA,142435.90,5056.7191170,N,00446.6237262,E,1,14,0.8,25.571,M,45.50,M,,*63");
-    //delay(dt1);
-    //Serial1.println("$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E");
-    //delay(dt4);
-    //Serial1.println("$GPZDA,142436.00,05,02,2023,,*64");
-
-    //binary message, lsb first, see NOVATEL description of NMEA protocol
-  /*
-    byte binmsg[]= {0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
+void sendbinary(){
+  //binary message, lsb first, see NOVATEL description of NMEA protocol
+  byte binmsg[]= {0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=Tiltdata, msg type=0x02=original message, source 2, binary, port adress=20=com1
                     0x38,0x00,0x00,0x00,0x6E,0xB4,0xC8,0x08, //msg length=0x3800=56 bytes, sequence id=0, idle time=0x6E, time status 0xB4=180=FINESTEERING, gps ref week=0xC808                   0xF0,0xD6,0x17,0x03,0x00,0x00,0x00,0x00,
                     0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00, //GPSec=0xF3168325, 
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, //all data is zero, meaning novatel does not send calculated tilt data as it doesnt have the sensors for that
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
                     0x00,0x00,0x00,0x00,0x4A,0xFA,0x2C,0x3F}; //last 4 bytes is CRC32 checksum
-    Serial1.write(binmsg,sizeof(binmsg)); 
-    delay(dt4);
-*/
-    digitalWrite(LED_BUILTIN, toggle); 
-    toggle=!toggle;
-    //Serial.println("arag...");
-    //delay(1000);
-    //send out to ARAG
-    //sendnmea(GPGGA(msg));
-    //sendnmea(GNVTG(msg));
-    //sendnmea(GPZDA(msg));
-  
-    //update time
-    //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
+  Serial1.write(binmsg,sizeof(binmsg)); 
 }
-
 void updatetime(){
   //fill time from a local real time clock running on Arduino
   //in real operation we want the clock to be given by the gps and NOT by the inacurate rtc
@@ -241,7 +212,7 @@ void updatetime(){
 void parseARAGcommands(const char* msg){
   //react to ARAG commands
   if (strcmp(msg,"\xAAD\x12\x1C\x04")) {
-    Serial.println("Receive binary message from Arag, ignoring it");
+    Serial.println("Received binary message from Arag, ignoring it");
     //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
     //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
     
@@ -250,7 +221,7 @@ void parseARAGcommands(const char* msg){
   else if (strcmp(msg,"log versiona once")){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial1.println("#VERSIONA,COM1,0,56.0,FINESTEERING,2248,51929.543,00000000,3681,9603;3,GPSCARD,\"N1GA\",\"DEL13280066\",\"MCAGTP-3.01-22B\",\"3.906\",\"3.002\",\"2013/Mar/14\",\"14:22:01\",DB_USERAPPAUTO,\"SmartAg\",\"0\",\"\",\"1.101\",\"\",\"2011/Sep/29\",\"17:13:55\",USERINFO,\"No BT\",\"\",\"\",\"\",\"\",\"\",\"\"*0cd69629");
-    Serial.println("Receive version request from Arag");
+    Serial.println("Received version request from Arag");
     // statements
   }
   else if (strcmp(msg,"unlogall com1 true") or strcmp(msg,"unlogall com2 true")){
