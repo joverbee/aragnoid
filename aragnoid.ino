@@ -106,17 +106,16 @@ void loop() {
     {
         //did we get a ASCII message?
         if (buffer[0]=='$'){
+          Serial.println(strlen(buffer));
+          Serial.println(buffer);
           if (parseGPGGA(buffer)>1){
             Serial.println("GPGGA parsed");
-           
           }
           else if (parseGNVTG(buffer)>1){
             Serial.println("GNVTG parsed");
-            
           }
           else if (parseGPZDA(buffer)>1){
             Serial.println("GPZDA parsed");
-            
           }
           else {
             Serial.println("Unable to parse message:");
@@ -143,10 +142,12 @@ void loop() {
 //listen to ARAG messages during startup
   if (receivedarag)
     {
+      Serial.println("parsing Arag commands");
       //did we get a ASCII message? 
       parseARAGcommands(bufferarag);
       receivedarag = false;
-    } else while (Serial1.available()) //read from ARAG
+    } 
+  else while (Serial1.available()) //read from ARAG
     {
         char c = Serial1.read();
         bufferarag[cntarag++] = c;
@@ -211,57 +212,58 @@ void updatetime(){
 }
 void parseARAGcommands(const char* msg){
   //react to ARAG commands
-  if (strcmp(msg,"\xAAD\x12\x1C\x04")) {
+  Serial.println(msg);
+  if (strcmp(msg,"\xAAD\x12\x1C\x04")==0) {
     Serial.println("Received binary message from Arag, ignoring it");
     //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
     //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
     
     // statements
   }
-  else if (strcmp(msg,"log versiona once")){
+  else if (strcmp(msg,"log versiona once")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial1.println("#VERSIONA,COM1,0,56.0,FINESTEERING,2248,51929.543,00000000,3681,9603;3,GPSCARD,\"N1GA\",\"DEL13280066\",\"MCAGTP-3.01-22B\",\"3.906\",\"3.002\",\"2013/Mar/14\",\"14:22:01\",DB_USERAPPAUTO,\"SmartAg\",\"0\",\"\",\"1.101\",\"\",\"2011/Sep/29\",\"17:13:55\",USERINFO,\"No BT\",\"\",\"\",\"\",\"\",\"\",\"\"*0cd69629");
     Serial.println("Received version request from Arag");
     // statements
   }
-  else if (strcmp(msg,"unlogall com1 true") or strcmp(msg,"unlogall com2 true")){
+  else if (strcmp(msg,"unlogall com1 true")==0 or strcmp(msg,"unlogall com2 true")==0){
     //do nothing
     delay(1);
   }
-  else if (strcmp(msg,"nmeatalker auto")){
+  else if (strcmp(msg,"nmeatalker auto")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive nmeatalker auto from Arag");
   }
-  else if (strcmp(msg,"log com1 gpggalong ontime 0.1")){
+  else if (strcmp(msg,"log com1 gpggalong ontime 0.1")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive log gpggalong from Arag");
   }
-  else if (strcmp(msg,"log com1 gpvtg ontime 0.1")){
+  else if (strcmp(msg,"log com1 gpvtg ontime 0.1")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive log gpvtg from Arag");
   }
-  else if (strcmp(msg,"log com1 gpzda ontime 1")){
+  else if (strcmp(msg,"log com1 gpzda ontime 1")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive log gpzda from Arag");
   }
-  else if (strcmp(msg,"log com1 tiltdatab ontime 1")){
+  else if (strcmp(msg,"log com1 tiltdatab ontime 1")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive log tiltdatab from Arag");
   }
-  else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")){
+  else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial1.println("\r\n$PMDT,<,Tilt sensor not installed\r\n");
     Serial.println("Receive log PMDT from Arag");
   }
-  else if (strcmp(msg,"pdpfilter enable")){
+  else if (strcmp(msg,"pdpfilter enable")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive pdpfilter enable from Arag");
   }
-  else if (strcmp(msg,"pdpmode relative auto")){
+  else if (strcmp(msg,"pdpmode relative auto")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive pdpmode relative from Arag");
   }
-  else if (strcmp(msg,"sbascontrol disable")){
+  else if (strcmp(msg,"sbascontrol disable")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial.println("Receive sbascontrol disable from Arag");
   }
