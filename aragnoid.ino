@@ -50,6 +50,9 @@ int Year=0;
 bool toggle=true;
 bool ready=false;
 bool receivedarag=false;
+bool receivedaragbinary=false;
+bool binmode=false;
+
 
 int cnt=0;
 int cntarag=0;
@@ -68,8 +71,9 @@ void setup() {
   while (!Serial);
   rtc.begin(); // initialize RTC
   Serial1.begin(115200,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
+//Serial1.begin(9600,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
 
-  mySerial.begin(115200); //RX and TX on PIN 1/0, this will become the connection to RTKsimple
+  mySerial.begin(115200); //RX and TX on PIN 1/0, this is the connection to RTKsimple
   pinPeripheral(1, PIO_SERCOM); //Assign RX function to pin 1
   pinPeripheral(0, PIO_SERCOM); //Assign TX function to pin 0
   
@@ -106,8 +110,8 @@ void loop() {
     {
         //did we get a ASCII message?
         if (buffer[0]=='$'){
-          Serial.println(strlen(buffer));
-          Serial.println(buffer);
+          //Serial.println(strlen(buffer));
+          //Serial.println(buffer);
           if (parseGPGGA(buffer)>1){
             Serial.println("GPGGA parsed");
           }
@@ -142,20 +146,63 @@ void loop() {
 //listen to ARAG messages during startup
   if (receivedarag)
     {
-      Serial.println("parsing Arag commands");
+      Serial.println("parsing ascii Arag commands");
       //did we get a ASCII message? 
       parseARAGcommands(bufferarag);
       receivedarag = false;
     } 
+  else if (receivedaragbinary)
+    {
+      Serial.print("got a binary arag command of 64 bytes");
+      Serial.println("returning it to arag to signal that we understood it");
+      Serial1.write(bufferarag,64);
+    //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
+    //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
+      receivedaragbinary = false;
+  }
   else while (Serial1.available()) //read from ARAG
+  //but try to make the difference between a digital message or an ascii one
+  //in ascii several characters are forbidden like 0xAA which signals the start of a binary message
+  //on the other hand, ascii strings are ending with \n while this could be a valid binary part of the data
+
     {
         char c = Serial1.read();
         bufferarag[cntarag++] = c;
-        if ((c == '\n') || (cntarag == sizeof(bufferarag)-1))
+        if (cntarag == sizeof(bufferarag)-1)
         {
-            bufferarag[cntarag] = '\0';
-            cntarag = 0;
-            receivedarag = true;
+          //buffer overflow, starting from scratch and ignore this message which is apparently wrong
+          cntarag = 0;
+          receivedarag = false;
+          receivedaragbinary=false;
+          binmode=false;
+        }
+        else if (c == '\xAA'){
+          //start of a new binary message, but what does this mean about the message that is now in the buffer?
+          //if the existing message was ascii than it was terminated with \n and then we already handled it in the previous character
+          bufferarag[0] = c;
+          cntarag=1; //we already received the first byte
+          receivedaragbinary=false;
+          binmode=true;
+          
+          receivedarag = false;
+        }
+        else if ((binmode==true) && (cntarag>63)){
+          //end of a binary message
+          receivedaragbinary=true;
+          cntarag=0;
+          receivedarag = false;
+        }
+        else if ((c=='\n') && (binmode==false))
+        {
+          //end of an ascii command but only if we are in ascii mode
+          
+          //it could work with [cntarag-1]='\0' novatel ends ascii string with \r\n
+          //-1 worked in the Wokwi simulator, but real response on HW may differ
+          bufferarag[cntarag] = '\0'; //end with null char to make it a valid string
+
+          cntarag = 0;
+          receivedarag = true;
+          receivedaragbinary=false;
         }
     }
 
@@ -164,7 +211,7 @@ void loop() {
 
 
     //send to ARAG messages based on the global coordinates that we filled in from the parsed data
-    if ( millis() - lastTime > 100){
+    if ( millis() - lastTime > 10){
       GPGGA(msg);
       sendnmea(msg);
       //sendnmea("test"); //10Hz
@@ -172,7 +219,7 @@ void loop() {
       sendnmea(msg); //10Hz
       lastTime=millis();
       cntzda++;
-      if (cntzda>9){
+      if (cntzda>2){
           GPZDA(msg);
           sendnmea(msg); //1 Hz
           sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
@@ -212,15 +259,8 @@ void updatetime(){
 }
 void parseARAGcommands(const char* msg){
   //react to ARAG commands
-  Serial.println(msg);
-  if (strcmp(msg,"\xAAD\x12\x1C\x04")==0) {
-    Serial.println("Received binary message from Arag, ignoring it");
-    //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
-    //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
-    
-    // statements
-  }
-  else if (strcmp(msg,"log versiona once")==0){
+  
+  if (strcmp(msg,"log versiona once")==0){
     Serial1.println("\r\n<OK\r\n[COM1]");
     Serial1.println("#VERSIONA,COM1,0,56.0,FINESTEERING,2248,51929.543,00000000,3681,9603;3,GPSCARD,\"N1GA\",\"DEL13280066\",\"MCAGTP-3.01-22B\",\"3.906\",\"3.002\",\"2013/Mar/14\",\"14:22:01\",DB_USERAPPAUTO,\"SmartAg\",\"0\",\"\",\"1.101\",\"\",\"2011/Sep/29\",\"17:13:55\",USERINFO,\"No BT\",\"\",\"\",\"\",\"\",\"\",\"\"*0cd69629");
     Serial.println("Received version request from Arag");
@@ -292,8 +332,9 @@ int parseGPGGA(const char * m)
         DGPSid,
         &chk
         );
-    if (n!=15) {
-      Serial.println("parsing failed to retrieve all 15 variables");
+    if (n!=15 ) {
+      Serial.print("parsing failed to retrieve all 15 variables, only received: ");
+      Serial.println(n);      
       //12 is also good if DGPS is not on
     }
     //check if all could be read
@@ -326,7 +367,9 @@ void GPGGA(char * m)
 int parseGNVTG(const char * m)
 {
   int chk=0;
-  int n=sscanf(m,"$GNVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%d",
+  char xchar;  
+  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%d",
+        &xchar,
         Tracktrue,
         Trackmag,
         Knots,
@@ -336,7 +379,9 @@ int parseGNVTG(const char * m)
         &chk
         );
     if (n!=6) {
-      Serial.println("GNVTG parsing failed to retrieve all 6 variables");
+      Serial.print("GNVTG parsing failed to retrieve all 6 variables, only got:");
+      Serial.println(n);      
+
     }
     //check if all could be read
     //check if checksum was correct?
@@ -363,7 +408,9 @@ int parseGPZDA(const char * m)
         &chk
         );
     if (n!=5) {
-      Serial.println("GPZDA parsing failed to retrieve all 5 variables");
+      Serial.print("GPZDA parsing failed to retrieve all 5 variables, ony got:");
+      Serial.println(n);      
+
     }
     //check if all could be read
     //check if checksum was correct?
@@ -389,10 +436,10 @@ void sendnmea(const char * m)
   Serial1.println(checksum(m), HEX); //convert checksum byte to hex
 
   //and also to USB for monitoring
-  Serial.print('$'); //prequel
-  Serial.print(m); //msg
-  Serial.print('*'); //sequal
-  Serial.println(checksum(m), HEX); //convert checksum byte to hex
+  //Serial.print('$'); //prequel
+  //Serial.print(m); //msg
+  //Serial.print('*'); //sequal
+  //Serial.println(checksum(m), HEX); //convert checksum byte to hex
 
 
 
