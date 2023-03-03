@@ -318,8 +318,9 @@ void parseARAGcommands(const char* msg){
 }
 int parseGPGGA(const char * m)
 {
-  int chk=0;
-  int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%d",
+  char chk1='0';
+  char chk2='0';
+  int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]%*c%c%c",
         Time,
         Latitude,
         &NSchar,
@@ -334,11 +335,15 @@ int parseGPGGA(const char * m)
         &unitchar,
         DGPSupdate,
         DGPSid,
-        &chk
+        &chk1,
+        &chk2
         );
     if (n!=15 ) {
       Serial.print("parsing failed to retrieve all 15 variables, only received: ");
-      Serial.println(n);      
+      Serial.println(n);     
+      Serial.print("checksum was:");
+      Serial.println(chk1);  
+      Serial.println(chk2);  
       //12 is also good if DGPS is not on
     }
     //check if all could be read
@@ -371,8 +376,9 @@ void GPGGA(char * m)
 int parseGNVTG(const char * m)
 {
   int chk=0;
-  
-  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%d",
+  char chk1='0';
+  char chk2='0';
+  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c%*c%c%c",
         &xchar,
         Tracktrue,
         Trackmag,
@@ -380,11 +386,16 @@ int parseGNVTG(const char * m)
         Speed,
         &Speedunits,
         &Modechar,
-        &chk
+        &chk1,
+        &chk2
         );
     if (n!=8) {
       Serial.print("GNVTG parsing failed to retrieve all 8 variables, only got:");
-      Serial.println(n);      
+      Serial.println(n); 
+      Serial.print("checksum was:");
+      Serial.println(chk1); 
+      Serial.println(chk2); 
+
     }
     //check if all could be read
     //check if checksum was correct?
@@ -402,17 +413,21 @@ void GNVTG(char * m){
 
 int parseGPZDA(const char * m)
 {
-  int chk=0;
-  int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,,*%d",
+  char chk1='0';
+  char chk2='0';
+  int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,,%*c%c%c",
         Time,
         &Day,
         &Month,
         &Year,
-        &chk
+        &chk1,
+        &chk2
         );
     if (n!=5) {
       Serial.print("GPZDA parsing failed to retrieve all 5 variables, ony got:");
-      Serial.println(n);      
+      Serial.println(n);
+      Serial.println(chk1); 
+      Serial.println(chk2); 
     }
     //check if all could be read
     //check if checksum was correct?
