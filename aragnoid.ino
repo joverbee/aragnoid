@@ -20,8 +20,8 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //global coordinates
-//store long and lat as 2 char strings, one for units and another for decimals, we will not do calculations
-//with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
+//store long and lat as char strings
+//we will not do calculations with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
 //this also solves the fact that Arduino has difficulty in dealing with floats in printf and scanf
 char Time[STRINGSINGLE];
 char Latitude[STRINGSINGLE];
@@ -42,6 +42,7 @@ char Knots[STRINGSINGLE];
 char Speed[STRINGSINGLE];
 char Speedunits='K';
 char Modechar='D';
+char xchar='P'; 
 //ZDA
 int Day=0;
 int Month=0;
@@ -53,7 +54,6 @@ bool receivedarag=false;
 bool receivedaragbinary=false;
 bool binmode=false;
 
-
 int cnt=0;
 int cntarag=0;
 
@@ -64,16 +64,17 @@ char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 
-
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200); //usb uart, will spit out debug messages as RTKsimple data is being parsed
   while (!Serial);
   rtc.begin(); // initialize RTC
   Serial1.begin(115200,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
+  while (!Serial1);
 //Serial1.begin(9600,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
 
   mySerial.begin(115200); //RX and TX on PIN 1/0, this is the connection to RTKsimple
+  while (!mySerial);
   pinPeripheral(1, PIO_SERCOM); //Assign RX function to pin 1
   pinPeripheral(0, PIO_SERCOM); //Assign TX function to pin 0
   
@@ -84,23 +85,8 @@ void setup() {
   rtc.setSeconds(0);
   updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 
-
-  int n=0;
-  //test parsing and fill global coordinates
-  const char* testGPGGA= "$GPGGA,142518.90,5056.7191279,N,00446.6237381,E,1,14,0.8,25.593,M,45.50,M,,*67";
-  n=parseGPGGA(testGPGGA);
-  Serial.println(n);
-
-  const char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
-  n=parseGNVTG(testGNVTG);
-  Serial.println(n);
-
-  const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
-  n=parseGPZDA(testGPZDA);
-  Serial.println(n);
-
+  debugtest();
   Serial.println("Aragnoid started"); 
-
 }
 
 void loop() {
@@ -122,7 +108,7 @@ void loop() {
             Serial.println("GPZDA parsed");
           }
           else {
-            Serial.println("Unable to parse message:");
+            Serial.println("Unable to parse messages:");
             Serial.println(buffer);
           }
         }
@@ -135,11 +121,23 @@ void loop() {
     {
         char c = mySerial.read();
         buffer[cnt++] = c;
-        if ((c == '\n') || (cnt == sizeof(buffer)-1))
-        {
-            buffer[cnt] = '\0';
+        if (c == '\n')
+        {   
+            if (cnt>2){
+              buffer[cnt-2] = '\0'; //get rid of /r/n from the serial message
+              ready = true;
+            }
+            else{
+              buffer[0]='\0'; //meaningless ascii without /r/n ending, ignoring
+              ready = false;
+            }
             cnt = 0;
-            ready = true;
+            
+        }
+        else if (cnt == sizeof(buffer)-1){
+          cnt=0;
+          buffer[0]='\0';
+          ready=false;
         }
     }
 
@@ -163,8 +161,7 @@ void loop() {
   else while (Serial1.available()) //read from ARAG
   //but try to make the difference between a digital message or an ascii one
   //in ascii several characters are forbidden like 0xAA which signals the start of a binary message
-  //on the other hand, ascii strings are ending with \n while this could be a valid binary part of the data
-
+  //on the other hand, received serial ascii strings are ending with \r\n while this could be a valid binary part of the data
     {
         char c = Serial1.read();
         bufferarag[cntarag++] = c;
@@ -172,6 +169,7 @@ void loop() {
         {
           //buffer overflow, starting from scratch and ignore this message which is apparently wrong
           cntarag = 0;
+          bufferarag[0] = '\0'; //empty string
           receivedarag = false;
           receivedaragbinary=false;
           binmode=false;
@@ -183,7 +181,6 @@ void loop() {
           cntarag=1; //we already received the first byte
           receivedaragbinary=false;
           binmode=true;
-          
           receivedarag = false;
         }
         else if ((binmode==true) && (cntarag>63)){
@@ -191,6 +188,7 @@ void loop() {
           receivedaragbinary=true;
           cntarag=0;
           receivedarag = false;
+          binmode=false;
         }
         else if ((c=='\n') && (binmode==false))
         {
@@ -198,10 +196,15 @@ void loop() {
           
           //it could work with [cntarag-1]='\0' novatel ends ascii string with \r\n
           //-1 worked in the Wokwi simulator, but real response on HW may differ
-          bufferarag[cntarag] = '\0'; //end with null char to make it a valid string
-
+          if (cntarag>2){
+            bufferarag[cntarag-2] = '\0'; //end with null char to make it a valid string
+            receivedarag = true;
+          }
+          else{
+            bufferarag[0]='\0';
+            receivedarag = false;
+          }
           cntarag = 0;
-          receivedarag = true;
           receivedaragbinary=false;
         }
     }
@@ -211,7 +214,7 @@ void loop() {
 
 
     //send to ARAG messages based on the global coordinates that we filled in from the parsed data
-    if ( millis() - lastTime > 10){
+    if ( millis() - lastTime > 100){
       GPGGA(msg);
       sendnmea(msg);
       //sendnmea("test"); //10Hz
@@ -219,7 +222,7 @@ void loop() {
       sendnmea(msg); //10Hz
       lastTime=millis();
       cntzda++;
-      if (cntzda>2){
+      if (cntzda>9){
           GPZDA(msg);
           sendnmea(msg); //1 Hz
           sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
@@ -252,7 +255,8 @@ void updatetime(){
   //use only for debugging purposes
   sprintf(Time,"%2d%2d%2d.00",rtc.getHours(),rtc.getMinutes(),rtc.getSeconds()); //no millisecond in rtc
   Serial.print("Time=");
-  Serial.println(Time); 
+
+
   Day=rtc.getDay();
   Month=rtc.getMonth();
   Year=rtc.getYear();
@@ -367,7 +371,7 @@ void GPGGA(char * m)
 int parseGNVTG(const char * m)
 {
   int chk=0;
-  char xchar;  
+  
   int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%d",
         &xchar,
         Tracktrue,
@@ -378,10 +382,9 @@ int parseGNVTG(const char * m)
         &Modechar,
         &chk
         );
-    if (n!=6) {
-      Serial.print("GNVTG parsing failed to retrieve all 6 variables, only got:");
+    if (n!=8) {
+      Serial.print("GNVTG parsing failed to retrieve all 8 variables, only got:");
       Serial.println(n);      
-
     }
     //check if all could be read
     //check if checksum was correct?
@@ -410,13 +413,11 @@ int parseGPZDA(const char * m)
     if (n!=5) {
       Serial.print("GPZDA parsing failed to retrieve all 5 variables, ony got:");
       Serial.println(n);      
-
     }
     //check if all could be read
     //check if checksum was correct?
     //Serial.print(n);
   return n;
-
 }
 
 
@@ -461,4 +462,54 @@ char checksum(const char* m)
 void SERCOM3_Handler()
 {
   mySerial.IrqHandler();
+}
+
+void debugtest()
+{
+  Serial.println("Testing functionality"); 
+  int n=0;
+  //test parsing and fill global coordinates, these are from Novatel valid messages
+  const char* testGPGGA= "$GPGGA,142518.90,5056.7191279,N,00446.6237381,E,1,14,0.8,25.593,M,45.50,M,,*67";
+  n=parseGPGGA(testGPGGA);
+  Serial.println(n);
+
+  const char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
+  n=parseGNVTG(testGNVTG);
+  Serial.println(n);
+
+  const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
+  n=parseGPZDA(testGPZDA);
+  Serial.println(n);
+
+  Serial.println("Testing functionality with ardusimple messages"); 
+  //now with ardusimple messages
+  const char* atestGPGGA= "$GPGGA,152027.40,5056.7186002,N,00446.6230636,E,4,12,0.55,18.106,M,46.220,M,0.4,3174*44";
+  n=parseGPGGA(atestGPGGA);
+  Serial.println(n);
+  
+  const char* atestGNVTG= "$GPVTG,,T,,M,0.019,N,0.036,K,D*2B";
+  n=parseGNVTG(atestGNVTG);
+  Serial.println(n);
+
+  const char* atestGPZDA= "$GPZDA,152027.40,05,02,2023,00,00*65";
+  n=parseGPZDA(atestGPZDA);
+  Serial.println(n);
+
+  Serial.println("Testing arag parsing functionality");
+  const char* testARAG= "log versiona once";
+  parseARAGcommands(testARAG);
+
+  
+  const char* bintestARAG= "\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx";
+  Serial.println("binary message");  
+  Serial.write(bintestARAG,64);
+  Serial.println();
+
+  Serial.println("end of test code");
+
+  
+
+
+
+
 }
