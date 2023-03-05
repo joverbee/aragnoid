@@ -427,7 +427,7 @@ int parseGNVTG(const char * m)
     Serial.println(xchar);
     Serial.print("Tracktrue : ");
     Serial.println(Tracktrue);
-    Serial.print("&Trackmag : ");
+    Serial.print("Trackmag : ");
     Serial.println(Trackmag);
     Serial.print("Knots : ");
     Serial.println(Knots);
@@ -467,7 +467,7 @@ int parseGPZDA(const char * m)
         &chk
         );
     if (n!=5) {
-      Serial.print("GPZDA parsing failed to retrieve all 5 variables, ony got:");
+      Serial.print("GPZDA parsing failed to retrieve all 5 variables, only got:");
       Serial.println(n);
     }
 
@@ -558,7 +558,7 @@ void debugtest()
   n=parseGPGGA(atestGPGGA);
   Serial.println(n);
   
-  const char* atestGNVTG= "$GPVTG,,T,,M,0.019,N,0.036,K,D*2B";
+  const char* atestGNVTG= "$GPVTG,335.788,T,,M,0.019,N,0.036,K,D*2B";
   n=parseGNVTG(atestGNVTG);
   Serial.println(n);
 
