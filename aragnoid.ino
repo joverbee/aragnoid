@@ -277,8 +277,7 @@ void parseARAGcommands(const char* msg){
     // statements
   }
   else if (strcmp(msg,"unlogall com1 true")==0 or strcmp(msg,"unlogall com2 true")==0){
-    //do nothing
-    delay(1);
+    sendOK();
   }
   else if (strcmp(msg,"nmeatalker auto")==0){
     sendOK();
@@ -302,7 +301,7 @@ void parseARAGcommands(const char* msg){
   }
   else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")==0){
     sendOK();
-    Serial1.println("\r\n$PMDT,<,Tilt sensor not installed\r\n");
+    Serial1.println("\r\n$PMDT,<,Tilt sensor not installed");
     Serial.println("Receive log PMDT from Arag");
   }
   else if (strcmp(msg,"pdpfilter enable")==0){
