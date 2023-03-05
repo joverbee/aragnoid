@@ -98,6 +98,19 @@ void loop() {
         if (buffer[0]=='$'){
           //Serial.println(strlen(buffer));
           //Serial.println(buffer);
+
+          Serial.println("\n\n buffer input");
+          Serial.println(buffer);
+
+          if(buffer[3] == 'G'){
+              parseGPGGA(buffer);            
+          }else if(buffer[3] == 'V'){
+              parseGNVTG(buffer);
+          }else if(buffer[3] == 'Z'){
+              parseGPZDA(buffer);
+          }
+
+          /*
           if (parseGPGGA(buffer)>1){
             Serial.println("GPGGA parsed");
           }
@@ -111,6 +124,7 @@ void loop() {
             Serial.println("Unable to parse messages:");
             Serial.println(buffer);
           }
+          */
         }
         else {
           Serial.println("A binary message, ignoring");
@@ -318,9 +332,9 @@ void parseARAGcommands(const char* msg){
 }
 int parseGPGGA(const char * m)
 {
-  char chk1='0';
-  char chk2='0';
-  int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]%*c%c%c",
+  int chk=0;
+  int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%x",
+
         Time,
         Latitude,
         &NSchar,
@@ -335,17 +349,46 @@ int parseGPGGA(const char * m)
         &unitchar,
         DGPSupdate,
         DGPSid,
-        &chk1,
-        &chk2
+        &chk
         );
     if (n!=15 ) {
       Serial.print("parsing failed to retrieve all 15 variables, only received: ");
       Serial.println(n);     
-      Serial.print("checksum was:");
-      Serial.println(chk1);  
-      Serial.println(chk2);  
       //12 is also good if DGPS is not on
     }
+
+    Serial.println("result gpggga parsing :" );
+    Serial.print("Time : ");
+    Serial.println(Time);
+    Serial.print("Latitude : ");
+    Serial.println(Latitude);
+    Serial.print("&NSchar : ");
+    Serial.println(&NSchar);
+    Serial.print("Longitude : ");
+    Serial.println(Longitude);
+    Serial.print("EWchar : ");
+    Serial.println(&EWchar);
+    Serial.print("Quality : ");
+    Serial.println(Quality);
+    Serial.print("NSat : ");
+    Serial.println(NSat);
+    Serial.print("HDOP : ");
+    Serial.println(HDOP);
+    Serial.print("Altitude : ");
+    Serial.println(Altitude);
+    Serial.print("unitchar : ");
+    Serial.println(&unitchar);
+    Serial.print("HWGS84 : ");
+    Serial.println(HWGS84);
+    Serial.print("unitchar : ");
+    Serial.println(&unitchar);
+    Serial.print("DGPSupdate : ");
+    Serial.println(DGPSupdate);
+    Serial.print("DGPSid : ");
+    Serial.println(DGPSid);
+    Serial.print("chk : ");
+    Serial.println(chk);
+
     //check if all could be read
     //check if checksum was correct?
   return n;
@@ -371,14 +414,16 @@ void GPGGA(char * m)
   
   //202530.00,5109.0262,N,11401.8407,W,5,40,0.5,1097.36,M,-17.00,M,18,TSTR"; //checksum should be 61
   //mySerial.println(msg);
+
+  
 }
 
 int parseGNVTG(const char * m)
 {
   int chk=0;
-  char chk1='0';
-  char chk2='0';
-  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c%*c%c%c",
+
+  
+  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%x",
         &xchar,
         Tracktrue,
         Trackmag,
@@ -386,17 +431,29 @@ int parseGNVTG(const char * m)
         Speed,
         &Speedunits,
         &Modechar,
-        &chk1,
-        &chk2
+        &chk,
         );
     if (n!=8) {
       Serial.print("GNVTG parsing failed to retrieve all 8 variables, only got:");
       Serial.println(n); 
-      Serial.print("checksum was:");
-      Serial.println(chk1); 
-      Serial.println(chk2); 
-
     }
+    Serial.println("result GNVTG parsing :" );
+    Serial.print("xchar : ");
+    Serial.println(xchar);
+    Serial.print("Tracktrue : ");
+    Serial.println(Tracktrue);
+    Serial.print("&Trackmag : ");
+    Serial.println(Trackmag);
+    Serial.print("Knots : ");
+    Serial.println(Knots);
+    Serial.print("Speed : ");
+    Serial.println(Speed);
+    Serial.print("Speedunits : ");
+    Serial.println(Speedunits);
+    Serial.print(" Modechar : ");
+    Serial.println( Modechar);
+    Serial.print("chk : ");
+    Serial.println(chk);
     //check if all could be read
     //check if checksum was correct?
     //Serial.print(n);
@@ -413,22 +470,36 @@ void GNVTG(char * m){
 
 int parseGPZDA(const char * m)
 {
-  char chk1='0';
-  char chk2='0';
-  int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,,%*c%c%c",
+
+  int chk=0;
+  Serial.println("ZDA Input string");
+  Serial.println(m);
+  int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,00,00*%x",
         Time,
         &Day,
         &Month,
         &Year,
-        &chk1,
-        &chk2
+        &chk
         );
     if (n!=5) {
       Serial.print("GPZDA parsing failed to retrieve all 5 variables, ony got:");
       Serial.println(n);
-      Serial.println(chk1); 
-      Serial.println(chk2); 
     }
+
+       Serial.println("result ZDA parsing :" );
+    Serial.print("Time : ");
+    Serial.println(Time);
+    Serial.print("Day : ");
+    Serial.println(Day);
+    Serial.print("Month : ");
+    Serial.println(Month);
+    Serial.print("Year : ");
+    Serial.println(Year);
+    Serial.print("chk : ");
+    Serial.println(chk);
+   
+
+
     //check if all could be read
     //check if checksum was correct?
     //Serial.print(n);
@@ -523,8 +594,4 @@ void debugtest()
   Serial.println("end of test code");
 
   
-
-
-
-
 }
