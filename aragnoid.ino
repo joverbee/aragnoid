@@ -215,11 +215,12 @@ void loop() {
 
     //send to ARAG messages based on the global coordinates that we filled in from the parsed data
     if ( millis() - lastTime > 100){
+      GNVTG(msg);
+      sendnmea(msg); //10Hz
       GPGGA(msg);
       sendnmea(msg);
       //sendnmea("test"); //10Hz
-      GNVTG(msg);
-      sendnmea(msg); //10Hz
+      
       lastTime=millis();
       cntzda++;
       if (cntzda>9){
@@ -301,7 +302,8 @@ void parseARAGcommands(const char* msg){
   }
   else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")==0){
     sendOK();
-    Serial1.println("\r\n$PMDT,<,Tilt sensor not installed");
+    Serial1.println();
+    Serial1.println("$PMDT,<,Tilt sensor not installed");
     Serial.println("Receive log PMDT from Arag");
   }
   else if (strcmp(msg,"pdpfilter enable")==0){
@@ -386,7 +388,7 @@ int parseGPGGA(const char * m)
 void GPGGA(char * m)
 {
   //prepare GPGGA msg depending on global position variables 
-  
+  //Quality=1; //in case ARAG doesnt like 4
   sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", Time,
                                                               Latitude,
                                                               NSchar,
@@ -512,10 +514,10 @@ void sendnmea(const char * m)
   Serial1.println(checksum(m), HEX); //convert checksum byte to hex
 
   //and also to USB for monitoring
-  //Serial.print('$'); //prequel
-  //Serial.print(m); //msg
-  //Serial.print('*'); //sequal
-  //Serial.println(checksum(m), HEX); //convert checksum byte to hex
+  Serial.print('$'); //prequel
+  Serial.print(m); //msg
+  Serial.print('*'); //sequal
+  Serial.println(checksum(m), HEX); //convert checksum byte to hex
 
 
 
@@ -543,18 +545,7 @@ void debugtest()
 {
   Serial.println("Testing functionality"); 
   int n=0;
-  //test parsing and fill global coordinates, these are from Novatel valid messages
-  const char* testGPGGA= "$GPGGA,142518.90,5056.7191279,N,00446.6237381,E,1,14,0.8,25.593,M,45.50,M,,*67";
-  n=parseGPGGA(testGPGGA);
-  Serial.println(n);
-
-  const char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
-  n=parseGNVTG(testGNVTG);
-  Serial.println(n);
-
-  const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
-  n=parseGPZDA(testGPZDA);
-  Serial.println(n);
+  
 
   Serial.println("Testing functionality with ardusimple messages"); 
   //now with ardusimple messages
@@ -569,6 +560,22 @@ void debugtest()
   const char* atestGPZDA= "$GPZDA,152027.40,05,02,2023,00,00*65";
   n=parseGPZDA(atestGPZDA);
   Serial.println(n);
+
+  //test parsing and fill global coordinates, these are from Novatel valid messages
+  const char* testGPGGA= "$GPGGA,142518.90,5056.7191279,N,00446.6237381,E,1,14,0.8,25.593,M,45.50,M,,*67";
+  n=parseGPGGA(testGPGGA);
+  Serial.println(n);
+
+  //const char* testGNVTG= "$GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E";
+  const char* testGNVTG= "$GNVTG,335.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  
+  n=parseGNVTG(testGNVTG);
+  Serial.println(n);
+
+  const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
+  n=parseGPZDA(testGPZDA);
+  Serial.println(n);
+
 
   Serial.println("Testing arag parsing functionality");
   const char* testARAG= "log versiona once";
