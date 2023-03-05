@@ -261,11 +261,17 @@ void updatetime(){
   Month=rtc.getMonth();
   Year=rtc.getYear();
 }
+
+void sendOK(){
+  Serial1.println(); //\r\n
+  Serial1.println("<OK"); //end with \r\n
+  Serial1.print("[COM1]"); //no ending with \r\n
+}
 void parseARAGcommands(const char* msg){
   //react to ARAG commands
   
   if (strcmp(msg,"log versiona once")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial1.println("#VERSIONA,COM1,0,56.0,FINESTEERING,2248,51929.543,00000000,3681,9603;3,GPSCARD,\"N1GA\",\"DEL13280066\",\"MCAGTP-3.01-22B\",\"3.906\",\"3.002\",\"2013/Mar/14\",\"14:22:01\",DB_USERAPPAUTO,\"SmartAg\",\"0\",\"\",\"1.101\",\"\",\"2011/Sep/29\",\"17:13:55\",USERINFO,\"No BT\",\"\",\"\",\"\",\"\",\"\",\"\"*0cd69629");
     Serial.println("Received version request from Arag");
     // statements
@@ -275,40 +281,40 @@ void parseARAGcommands(const char* msg){
     delay(1);
   }
   else if (strcmp(msg,"nmeatalker auto")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive nmeatalker auto from Arag");
   }
   else if (strcmp(msg,"log com1 gpggalong ontime 0.1")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive log gpggalong from Arag");
   }
   else if (strcmp(msg,"log com1 gpvtg ontime 0.1")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive log gpvtg from Arag");
   }
   else if (strcmp(msg,"log com1 gpzda ontime 1")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive log gpzda from Arag");
   }
   else if (strcmp(msg,"log com1 tiltdatab ontime 1")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive log tiltdatab from Arag");
   }
   else if (strcmp(msg,"$PMDT,u,,,,0.0*7A")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial1.println("\r\n$PMDT,<,Tilt sensor not installed\r\n");
     Serial.println("Receive log PMDT from Arag");
   }
   else if (strcmp(msg,"pdpfilter enable")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive pdpfilter enable from Arag");
   }
   else if (strcmp(msg,"pdpmode relative auto")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive pdpmode relative from Arag");
   }
   else if (strcmp(msg,"sbascontrol disable")==0){
-    Serial1.println("\r\n<OK\r\n[COM1]");
+    sendOK();
     Serial.println("Receive sbascontrol disable from Arag");
   }
   else{
@@ -320,7 +326,6 @@ int parseGPGGA(const char * m)
 {
   int chk=0;
   int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%x",
-
         Time,
         Latitude,
         &NSchar,
