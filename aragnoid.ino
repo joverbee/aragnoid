@@ -407,17 +407,17 @@ void GPGGA(char * m)
 int parseGNVTG(const char * m)
 {
   int chk=0;
-  int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%x",
+  int n=sscanf(m,"$G%cVTG,,T,,M,%20[^,],N,%20[^,],%c,%c*%x",
         &xchar,
-        Tracktrue,
-        Trackmag,
+        //Tracktrue,
+        //Trackmag,
         Knots,
         Speed,
         &Speedunits,
         &Modechar,
         &chk
         );
-    if (n!=8) {
+    if (n!=6) {
       Serial.print("GNVTG parsing failed to retrieve all 8 variables, only got:");
       Serial.println(n); 
     }
