@@ -110,21 +110,7 @@ void loop() {
               parseGPZDA(buffer);
           }
 
-          /*
-          if (parseGPGGA(buffer)>1){
-            Serial.println("GPGGA parsed");
-          }
-          else if (parseGNVTG(buffer)>1){
-            Serial.println("GNVTG parsed");
-          }
-          else if (parseGPZDA(buffer)>1){
-            Serial.println("GPZDA parsed");
-          }
-          else {
-            Serial.println("Unable to parse messages:");
-            Serial.println(buffer);
-          }
-          */
+          
         }
         else {
           Serial.println("A binary message, ignoring");
@@ -421,8 +407,6 @@ void GPGGA(char * m)
 int parseGNVTG(const char * m)
 {
   int chk=0;
-
-  
   int n=sscanf(m,"$G%cVTG,%20[^,],T,%20[^,],M,%20[^,],N,%20[^,],%c,%c*%x",
         &xchar,
         Tracktrue,
@@ -431,7 +415,7 @@ int parseGNVTG(const char * m)
         Speed,
         &Speedunits,
         &Modechar,
-        &chk,
+        &chk
         );
     if (n!=8) {
       Serial.print("GNVTG parsing failed to retrieve all 8 variables, only got:");
