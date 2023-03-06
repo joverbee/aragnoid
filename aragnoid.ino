@@ -18,6 +18,9 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 
 #define STRINGSINGLE 20
 #define MAXMESSAGESIZE 128
+#define DEBUG //print parsing details
+#define NMEAUSB //copy nmea messages also on usb uart 
+#define NORTK //drop RTK specifics to resemble more the novatel original
 
 //global coordinates
 //store long and lat as char strings
@@ -348,7 +351,7 @@ int parseGPGGA(const char * m)
       Serial.println(n);     
       //12 is also good if DGPS is not on
     }
-
+  #ifdef DEBUG
     Serial.println("result gpggga parsing :" );
     Serial.print("Time : ");
     Serial.println(Time);
@@ -380,6 +383,7 @@ int parseGPGGA(const char * m)
     Serial.println(DGPSid);
     Serial.print("chk : ");
     Serial.println(chk);
+    #endif
 
     //check if all could be read
     //check if checksum was correct?
@@ -388,7 +392,14 @@ int parseGPGGA(const char * m)
 void GPGGA(char * m)
 {
   //prepare GPGGA msg depending on global position variables 
-  //Quality=1; //in case ARAG doesnt like 4
+  
+  //make it look more like novatel by supressing rtk specific parts
+  #ifdef NORTK
+  Quality=1; //in case ARAG doesnt like 4
+  strcpy(DGPSupdate,""); //novatel has these empty as there is not differential GPS
+  strcpy(DGPSid,"");
+  #endif
+
   sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", Time,
                                                               Latitude,
                                                               NSchar,
@@ -428,6 +439,8 @@ int parseGNVTG(const char * m)
       Serial.println(n); 
     }
     strcpy(Trackmag,Tracktrue);
+
+    #ifdef DEBUG
     Serial.println("result GNVTG parsing :" );
     Serial.print("xchar : ");
     Serial.println(xchar);
@@ -445,6 +458,7 @@ int parseGNVTG(const char * m)
     Serial.println( Modechar);
     Serial.print("chk : ");
     Serial.println(chk);
+    #endif
     //check if all could be read
     //check if checksum was correct?
     //Serial.print(n);
@@ -476,8 +490,8 @@ int parseGPZDA(const char * m)
       Serial.print("GPZDA parsing failed to retrieve all 5 variables, only got:");
       Serial.println(n);
     }
-
-       Serial.println("result ZDA parsing :" );
+    #ifdef DEBUG
+    Serial.println("result ZDA parsing :" );
     Serial.print("Time : ");
     Serial.println(Time);
     Serial.print("Day : ");
@@ -488,9 +502,7 @@ int parseGPZDA(const char * m)
     Serial.println(Year);
     Serial.print("chk : ");
     Serial.println(chk);
-   
-
-
+    #endif
     //check if all could be read
     //check if checksum was correct?
     //Serial.print(n);
@@ -514,11 +526,12 @@ void sendnmea(const char * m)
   Serial1.println(checksum(m), HEX); //convert checksum byte to hex
 
   //and also to USB for monitoring
+  #ifdef NMEAUSB
   Serial.print('$'); //prequel
   Serial.print(m); //msg
   Serial.print('*'); //sequal
   Serial.println(checksum(m), HEX); //convert checksum byte to hex
-
+  #endif
 
 
   //showtext(msg); //and show on display
