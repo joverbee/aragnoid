@@ -18,7 +18,9 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 
 #define STRINGSINGLE 20
 #define MAXMESSAGESIZE 128
-#define DEBUG //print parsing details
+
+//comment any of these if you don't want this function
+//#define DEBUG //print parsing details
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original
 
@@ -102,8 +104,8 @@ void loop() {
           //Serial.println(strlen(buffer));
           //Serial.println(buffer);
 
-          Serial.println("\n\n buffer input");
-          Serial.println(buffer);
+          //Serial.println("\n\n buffer input");
+          //Serial.println(buffer);
 
           if(buffer[3] == 'G'){
               parseGPGGA(buffer);            
@@ -241,7 +243,7 @@ void loop() {
 
 void sendbinary(){
   //binary message, lsb first, see NOVATEL description of NMEA protocol
-  byte binmsg[]= {0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=Tiltdata, msg type=0x02=original message, source 2, binary, port adress=20=com1
+  byte binmsg[]= {  0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=Tiltdata, msg type=0x02=original message, source 2, binary, port adress=20=com1
                     0x38,0x00,0x00,0x00,0x6E,0xB4,0xC8,0x08, //msg length=0x3800=56 bytes, sequence id=0, idle time=0x6E, time status 0xB4=180=FINESTEERING, gps ref week=0xC808                   0xF0,0xD6,0x17,0x03,0x00,0x00,0x00,0x00,
                     0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00, //GPSec=0xF3168325, 
                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -469,6 +471,13 @@ void GNVTG(char * m){
   //prepare GNVTG string
   //multi constellation
   //example $GNVTG,139.969,T,139.969,M,0.007,N,0.013,K,D*3D
+
+  //add 3rd digit
+  //Tracktrue[6]='0';
+  //Tracktrue[7]='\0';
+  //Trackmag[6]='0';
+  //Trackmag[7]='\0';
+
   
   sprintf(m, "GNVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
 }
@@ -477,8 +486,10 @@ int parseGPZDA(const char * m)
 {
 
   int chk=0;
+  #ifdef DEBUG
   Serial.println("ZDA Input string");
   Serial.println(m);
+  #endif
   int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,00,00*%x",
         Time,
         &Day,
