@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include "wiring_private.h"
+#include <Arduino_CRC32.h>
+
 
 #include <SPI.h>
 #include <Wire.h>
@@ -13,6 +15,8 @@ Code to interface RTKsimple2b to an ARAG 400 to provide RTK precision GPS to a c
 /* Create an rtc object */
 RTCZero rtc;
 
+Arduino_CRC32 crc32;
+
 //create a serial 2 on pin 1 and 0
 Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the new UART instance assigning it to pin 1 and 0
 
@@ -20,10 +24,10 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-//#define DEBUG //print parsing details
+#define DEBUG //print parsing details
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original
-
+#define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
 //global coordinates
 //store long and lat as char strings
 //we will not do calculations with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
@@ -52,6 +56,16 @@ char xchar='P';
 int Day=0;
 int Month=0;
 int Year=0;
+//PUBX04
+char Hms[STRINGSINGLE];
+char Dmy[STRINGSINGLE];
+char UTC_TOW[STRINGSINGLE];
+unsigned long UTC_ms = 0;
+int UTC_Week;
+char Reserved[STRINGSINGLE];
+char Clk_B[STRINGSINGLE];
+char Clk_D[STRINGSINGLE];
+int PG;
 
 bool toggle=true;
 bool ready=false;
@@ -113,9 +127,9 @@ void loop() {
               parseGNVTG(buffer);
           }else if(buffer[3] == 'Z'){
               parseGPZDA(buffer);
+          }else if(buffer[3] == 'B'){
+              parsePUBX(buffer);
           }
-
-          
         }
         else {
           Serial.println("A binary message, ignoring");
@@ -243,16 +257,61 @@ void loop() {
 
 void sendbinary(){
   //binary message, lsb first, see NOVATEL description of NMEA protocol
-  byte binmsg[]= {  0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20, //sync, length of header 0x1c=16+12=28,message id=0xC404=1220=Tiltdata, msg type=0x02=original message, source 2, binary, port adress=20=com1
-                    0x38,0x00,0x00,0x00,0x6E,0xB4,0xC8,0x08, //msg length=0x3800=56 bytes, sequence id=0, idle time=0x6E, time status 0xB4=180=FINESTEERING, gps ref week=0xC808                   0xF0,0xD6,0x17,0x03,0x00,0x00,0x00,0x00,
-                    0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00, //GPSec=0xF3168325, 
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, //all data is zero, meaning novatel does not send calculated tilt data as it doesnt have the sensors for that
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                    0x00,0x00,0x00,0x00,0x4A,0xFA,0x2C,0x3F}; //last 4 bytes is CRC32 checksum
+  //Novatel is little endian, lsb first
+  byte binmsg[]= {  
+    0xAA,0x44,0x12,0x1C,0xC4,0x04,0x02,0x20,//sync, length of header 0x1c=16+12=28,message id=0xC404=1220=Tiltdata, msg type=0x02=original message, source 2, binary, port adress=20=com1
+    0x38,0x00,0x00,0x00,0x6B,0xB4,0xC8,0x08,//msg length=0x3800=56 bytes, sequence id=0, idle time=0x6E, time status 0xB4=180=FINESTEERING, gps ref week=0xC808
+    0xA0,0x8A,0x18,0x03,0x00,0x00,0x00,0x00,//GPSec=0xAO8A1803,
+    0xF3,0x16,0x83,0x25,0x00,0x00,0x00,0x00,//reserved-what is this? stays the same on novatel 
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, //all data is zero, meaning novatel does not send calculated tilt data as it doesnt have the sensors for that
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0xC6,0x43,0x16,0x5F}; //last 4 bytes is CRC32 checksum
+
+  //fill in reference week 2 byte , little endian
+  binmsg[14]=UTC_Week & 0x00FF;
+  binmsg[15]=UTC_Week>>8 & 0x00FF;
+  #ifdef DEBUG
+  Serial.print("ref week binary:");
+  Serial.print(binmsg[14],HEX);
+  Serial.print(binmsg[15],HEX);
+  Serial.println();
+  #endif 
+  //fill in GPSms ms since ref week 4byte, little endian
+  binmsg[16]=UTC_ms & 0x000000FF;
+  binmsg[17]=UTC_ms>>8 & 0x000000FF;
+  binmsg[18]=UTC_ms>>16  & 0x000000FF;
+  binmsg[19]=UTC_ms>>24     & 0x000000FF;
+  #ifdef DEBUG
+  Serial.print("ref UTC_ms binary:");
+  Serial.print(binmsg[16],HEX);
+  Serial.print(binmsg[17],HEX);
+  Serial.print(binmsg[18],HEX);
+  Serial.print(binmsg[19],HEX);
+  Serial.println();
+  #endif 
+
+
+  //and recalc the CRC32 
+  //uint32_t const crc32_res = crc32.calc((uint8_t const *)binmsg, sizeof(binmsg)-4);
+
+  uint32_t const crc32_res=CalculateBlockCRC32(sizeof(binmsg)-4, binmsg );
+
+  binmsg[84]=crc32_res      & 0x000000FF;
+  binmsg[85]=crc32_res>>8   & 0x000000FF;
+  binmsg[86]=crc32_res>>16  & 0x000000FF;
+  binmsg[87]=crc32_res>>24  & 0x000000FF;
+  #ifdef DEBUG
+  Serial.print("crc32 binary:");
+  Serial.print(binmsg[84],HEX);
+  Serial.print(binmsg[85],HEX);
+  Serial.print(binmsg[86],HEX);
+  Serial.print(binmsg[87],HEX);
+  Serial.println();
+  #endif 
   Serial1.write(binmsg,sizeof(binmsg)); 
 }
 void updatetime(){
@@ -328,6 +387,64 @@ void parseARAGcommands(const char* msg){
      Serial.println(msg);
   }
 }
+int parsePUBX(const char * m)
+{
+  //example
+  //$PUBX,04,073731.00,091202,113851.00,1196,113851.00,1930035,-2660.664,43*3C<CR><+LF>
+  //$PUBX,04,hhmmss.ss,ddmmyy,UTC_TOW,week,reserved,Clk_B,Clk_D,PG*hh<CR><LF>
+  int chk=0;
+  int n=sscanf(m,"$PUBX,04,%20[^,],%20[^,],%20[^,],%d,%20[^,],%20[^,],%20[^,],%d*%x",
+        Hms,
+        Dmy,
+        UTC_TOW,
+        &UTC_Week,
+        Reserved,
+        Clk_B,
+        Clk_D,
+        &PG,
+        &chk
+        );
+    if (n!=9 ) {
+      Serial.print("parsing failed to retrieve all 9 variables, only received: ");
+      Serial.println(n);     
+    }
+  //convert UTC_TOW to integer ms since ref week
+  int sec,ms;
+  int m2=sscanf(UTC_TOW,"%d.%d",&sec,&ms);
+  if (m2==2){
+    UTC_ms=sec*1000+ms*10; //assuming 2 digit
+  }
+  
+  #ifdef DEBUG
+    Serial.println("result pubx04 parsing :" );
+    Serial.print("Time : ");
+    Serial.println(Hms);
+    Serial.print("Dmy : ");
+    Serial.println(Dmy);
+    Serial.print("UTC_TOW : ");
+    Serial.println(UTC_TOW);
+    Serial.print("UTC_ms converted from UTC_TOW : ");
+    Serial.println(UTC_ms);
+    Serial.print("UTC_Week : ");
+    Serial.println(UTC_Week);
+    Serial.print("Reserved : ");
+    Serial.println(Reserved);
+    Serial.print("Clk_B : ");
+    Serial.println(Clk_B);
+    Serial.print("Clk_D : ");
+    Serial.println(Clk_D);
+    Serial.print("PG : ");
+    Serial.println(PG);
+    Serial.print("chk : ");
+    Serial.println(chk);
+    #endif
+
+    //check if all could be read
+    //check if checksum was correct?
+  return n;
+}
+
+
 int parseGPGGA(const char * m)
 {
   int chk=0;
@@ -600,6 +717,10 @@ void debugtest()
   n=parseGPZDA(testGPZDA);
   Serial.println(n);
 
+  const char* testPUBX= "$PUBX,04,073731.00,091202,113851.00,1196,113851.00,1930035,-2660.664,43*3C";
+  n=parsePUBX(testPUBX);
+  Serial.println(n);
+
 
   Serial.println("Testing arag parsing functionality");
   const char* testARAG= "log versiona once";
@@ -615,3 +736,46 @@ void debugtest()
 
   
 }
+
+/* --------------------------------------------------------------------------
+
+Calculate a CRC value to be used by CRC calculation functions.
+
+-------------------------------------------------------------------------- */
+
+unsigned long CRC32Value(int i) {
+     int j;
+     unsigned long ulCRC;
+     ulCRC = i;
+     for ( j = 8 ; j > 0; j-- ) {
+          if ( ulCRC & 1 )
+               ulCRC = ( ulCRC >> 1 ) ^ CRC32_POLYNOMIAL;
+          else
+               ulCRC >>= 1;
+     }
+     return ulCRC;
+}
+
+ 
+
+/* --------------------------------------------------------------------------
+
+Calculates the CRC-32 of a block of data all at once
+
+ulCount - Number of bytes in the data block
+
+ucBuffer - Data block
+
+-------------------------------------------------------------------------- */
+
+unsigned long CalculateBlockCRC32( unsigned long ulCount, unsigned char *ucBuffer ) {
+     unsigned long ulTemp1;
+     unsigned long ulTemp2;
+     unsigned long ulCRC = 0;
+     while ( ulCount-- != 0 ) {
+          ulTemp1 = ( ulCRC >> 8 ) & 0x00FFFFFFL;
+          ulTemp2 = CRC32Value( ((int) ulCRC ^ *ucBuffer++ ) & 0xFF );
+          ulCRC = ulTemp1 ^ ulTemp2;
+     }
+     return( ulCRC );
+} 
