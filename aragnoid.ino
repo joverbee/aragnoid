@@ -216,12 +216,47 @@ void loop() {
       Serial.print("got a binary arag command of 64 bytes");
       Serial.println("response binary");
       byte response[]= { 
-        0xAA,0x44,0x12,0x1C,0x04,0x00,0x80,0x20,
-        0x06,0x00,0x00,0x00,0x00,0xB4,0xC8,0x08,
-        0x3E,0x61,0x18,0x03,0x30,0x12,0x12,0x00,
-        0x00,0x00,0x12,0x00,0x01,0x00,0x00,0x00,
-        0x4F,0x4B,0x9D,0x38,0x92,0xFE};
-      Serial1.write(response,64);
+        0xAA,0x44,0x12,0x1C,0x04,0x00,0x80,0x20, //binary message, 28 bytes long, message ID 04, message type= Binary Response message, port adress 20=com1, 
+        0x06,0x00,0x00,0x00,0x00,0xB4,0xC8,0x08, //msg length=6 bytes , sequence=0, idle time=0, time status=B4=Finesteering, ref week=08C8, 
+        0x3E,0x61,0x18,0x03,0x30,0x12,0x12,0x00, //gps time=0318613E, receiver status 00121230, 
+        0x00,0x00,0x12,0x00,0x01,0x00,0x00,0x00, //reserved=0000, sw version=0012, payload bytes: 01 00 00 4F 4B no idea what they mean
+        0x4F,0x4B,0x9D,0x38,0x92,0xFE}; //crc
+      //fill in reference week 2 byte , little endian
+      response[14]=UTC_Week & 0x00FF;
+      response[15]=UTC_Week>>8 & 0x00FF;
+      #ifdef DEBUG                               
+      Serial.print("ref week binary:");
+      Serial.print(response[14],HEX);
+      Serial.print(response[15],HEX);
+      Serial.println();
+      #endif 
+      //fill in GPSms ms since ref week 4byte, little endian
+      response[16]=UTC_ms & 0x000000FF;
+      response[17]=UTC_ms>>8 & 0x000000FF;
+      response[18]=UTC_ms>>16  & 0x000000FF;
+      response[19]=UTC_ms>>24     & 0x000000FF;
+      #ifdef DEBUG
+      Serial.print("ref UTC_ms binary:");
+      Serial.print(response[16],HEX);
+      Serial.print(response[17],HEX);
+      Serial.print(response[18],HEX);
+      Serial.print(response[19],HEX);
+      Serial.println();
+      #endif 
+      uint32_t const crc32_res=CalculateBlockCRC32(sizeof(response)-4, response );
+      response[34]=crc32_res      & 0x000000FF;
+      response[35]=crc32_res>>8   & 0x000000FF;
+      response[36]=crc32_res>>16  & 0x000000FF;
+      response[37]=crc32_res>>24  & 0x000000FF;
+      #ifdef DEBUG
+      Serial.print("crc32 binary:");
+      Serial.print(response[34],HEX);
+      Serial.print(response[35],HEX);
+      Serial.print(response[36],HEX);
+      Serial.print(response[37],HEX);
+      Serial.println();
+      #endif 
+      Serial1.write(response,sizeof(response));
       receivedaragbinary = false;
   }
   else while (Serial1.available()) //read from ARAG
