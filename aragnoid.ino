@@ -214,10 +214,14 @@ void loop() {
   else if (receivedaragbinary)
     {
       Serial.print("got a binary arag command of 64 bytes");
-      Serial.println("returning it to arag to signal that we understood it");
-      Serial1.write(bufferarag,64);
-    //"\xAAD\x12\x1C\x04\0\0\xC0 \0\0\0\x90\xE4\xB7A\x98#S\00\x12\x12\0(       \x12\0\x01\0\0\0\0\xC2\x01\0\x01\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0j\x82Dx":
-    //sync, length of header 0x1c=16+12=28,message id=0x0400=4=???, msg type=0x02=original message, source 2, binary, port adress=20=com1
+      Serial.println("response binary");
+      byte response[]= { 
+        0xAA,0x44,0x12,0x1C,0x04,0x00,0x80,0x20,
+        0x06,0x00,0x00,0x00,0x00,0xB4,0xC8,0x08,
+        0x3E,0x61,0x18,0x03,0x30,0x12,0x12,0x00,
+        0x00,0x00,0x12,0x00,0x01,0x00,0x00,0x00,
+        0x4F,0x4B,0x9D,0x38,0x92,0xFE};
+      Serial1.write(response,64);
       receivedaragbinary = false;
   }
   else while (Serial1.available()) //read from ARAG
