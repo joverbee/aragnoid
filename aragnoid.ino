@@ -2,6 +2,9 @@
 #include "wiring_private.h"
 #include <Arduino_CRC32.h>
 
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+
 
 #include <SPI.h>
 #include <Wire.h>
@@ -24,10 +27,16 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print parsing details
+//#define DEBUG //print parsing details                             JUY
 #define NMEAUSB //copy nmea messages also on usb uart 
-#define NORTK //drop RTK specifics to resemble more the novatel original
+#define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
+#define GYRO //use gyro attached to arduino for tilt
+
+
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
+#define HEADER 28 //size of binary header in bytes
+
+
 //global coordinates
 //store long and lat as char strings
 //we will not do calculations with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
@@ -67,6 +76,14 @@ char Clk_B[STRINGSINGLE];
 char Clk_D[STRINGSINGLE];
 int PG;
 
+//GYRO
+double AccX=0.0; //acceleration in X direction m/s^2
+double AccY=0.0; //acceleration in Y direction m/s^2
+double TiltX=0.0; //tilt in X direction in degrees
+double TiltY=0.0; //tilt in Y direction in degrees
+bool gyro=false;
+
+
 bool toggle=true;
 bool ready=false;
 bool receivedarag=false;
@@ -82,6 +99,15 @@ int cntzda=0;
 char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
+
+
+
+/* Set the delay between fresh samples */
+#define BNO055_SAMPLERATE_DELAY_MS (100)
+// Check I2C device address and correct line below (by default address is 0x29 or 0x28)
+//                                   id, address
+Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -105,6 +131,23 @@ void setup() {
   updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 
   debugtest();
+
+  //start the gyro if needed
+  #ifdef GYRO
+  if(bno.begin())
+  {
+    Serial.println("BNO055 detected");
+    delay(1000);
+    bno.setExtCrystalUse(true);
+    gyro=true;
+  }else
+  {
+    Serial.println("No gyro found, continuiing without");
+    gyro=false;
+  }
+  #endif
+
+
   Serial.println("Aragnoid started"); 
 }
 
@@ -238,7 +281,11 @@ void loop() {
       sendnmea(msg); //10Hz
       GPGGA(msg);
       sendnmea(msg);
-      //sendnmea("test"); //10Hz
+      #ifdef GYRO
+      if (gyro) {
+        readgyro();
+      }
+      #endif
       
       lastTime=millis();
       cntzda++;
@@ -274,7 +321,7 @@ void sendbinary(){
   //fill in reference week 2 byte , little endian
   binmsg[14]=UTC_Week & 0x00FF;
   binmsg[15]=UTC_Week>>8 & 0x00FF;
-  #ifdef DEBUG
+  #ifdef DEBUG                               
   Serial.print("ref week binary:");
   Serial.print(binmsg[14],HEX);
   Serial.print(binmsg[15],HEX);
@@ -293,6 +340,55 @@ void sendbinary(){
   Serial.print(binmsg[19],HEX);
   Serial.println();
   #endif 
+
+#ifdef GYRO
+  //convert double to bytes
+  byte* AccXpointer = (byte*)&AccX;
+  byte* AccYpointer = (byte*)&AccY;
+  byte* TiltXpointer = (byte*)&TiltX;
+  byte* TiltYpointer = (byte*)&TiltY;
+  //AccX 8 byte double, float and double  are little endian on arduino
+  size_t id=HEADER+4;
+  binmsg[id++]=AccXpointer[0];
+  binmsg[id++]=AccXpointer[1];
+  binmsg[id++]=AccXpointer[2];
+  binmsg[id++]=AccXpointer[3];
+  binmsg[id++]=AccXpointer[4];
+  binmsg[id++]=AccXpointer[5];
+  binmsg[id++]=AccXpointer[6];
+  binmsg[id++]=AccXpointer[7];
+  //and AccY
+  binmsg[id++]=AccYpointer[0];
+  binmsg[id++]=AccYpointer[1];
+  binmsg[id++]=AccYpointer[2];
+  binmsg[id++]=AccYpointer[3];
+  binmsg[id++]=AccYpointer[4];
+  binmsg[id++]=AccYpointer[5];
+  binmsg[id++]=AccYpointer[6];
+  binmsg[id++]=AccYpointer[7];
+  //and Tiltx
+  id=HEADER+28;
+  binmsg[id++]=TiltXpointer[0];
+  binmsg[id++]=TiltXpointer[1];
+  binmsg[id++]=TiltXpointer[2];
+  binmsg[id++]=TiltXpointer[3];
+  binmsg[id++]=TiltXpointer[4];
+  binmsg[id++]=TiltXpointer[5];
+  binmsg[id++]=TiltXpointer[6];
+  binmsg[id++]=TiltXpointer[7];
+  //Tilty
+  binmsg[id++]=TiltYpointer[0];
+  binmsg[id++]=TiltYpointer[1];
+  binmsg[id++]=TiltYpointer[2];
+  binmsg[id++]=TiltYpointer[3];
+  binmsg[id++]=TiltYpointer[4];
+  binmsg[id++]=TiltYpointer[5];
+  binmsg[id++]=TiltYpointer[6];
+  binmsg[id++]=TiltYpointer[7];
+#endif
+
+#ifdef DEBUG
+#endif
 
 
   //and recalc the CRC32 
@@ -514,7 +610,7 @@ void GPGGA(char * m)
   
   //make it look more like novatel by supressing rtk specific parts
   #ifdef NORTK
-  Quality=1; //in case ARAG doesnt like 4
+  //Quality=1; //in case ARAG doesnt like 4
   strcpy(DGPSupdate,""); //novatel has these empty as there is not differential GPS
   strcpy(DGPSid,"");
   #endif
@@ -779,3 +875,42 @@ unsigned long CalculateBlockCRC32( unsigned long ulCount, unsigned char *ucBuffe
      }
      return( ulCRC );
 } 
+
+void readgyro(){
+  
+
+  //read Euler tilt angles
+  
+  //read BNO055 gyroscope
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+
+  /* Display the floating point data */
+  #ifdef DEBUG
+  Serial.print("tiltX: ");
+  Serial.print(euler.x());
+  Serial.print(" tiltY: ");
+  Serial.print(euler.y());
+  Serial.print(" tiltZ: ");
+  Serial.print(euler.z());
+  Serial.print("\t\t");
+  #endif
+
+  //read acceleration vector
+  
+  #ifdef DEBUG
+  Serial.print("aX: ");
+  Serial.print(accel.x());
+  Serial.print(" aY: ");
+  Serial.print(accel.y());
+  Serial.print(" aZ: ");
+  Serial.print(accel.z());
+  Serial.print("\t\t");
+  #endif
+
+  //fill in global coordinates
+  AccX=accel.x();
+  AccY=accel.y();
+  TiltX=euler.x();
+  TiltY=euler.y();
+}
