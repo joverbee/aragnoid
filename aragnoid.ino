@@ -12,6 +12,7 @@
 /* Aragnoid: 
 Tame that tractor project
 Code to interface RTKsimple2b to an ARAG 400 to provide RTK precision GPS to a closed ecosystem sprayer
+USING Arduino MKRZero board
 */
 
 
@@ -23,14 +24,14 @@ Arduino_CRC32 crc32;
 //create a serial 2 on pin 1 and 0
 Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the new UART instance assigning it to pin 1 and 0
 
-#define STRINGSINGLE 20
+#define STRINGSINGLE 21
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
 //#define DEBUG //print parsing details                             JUY
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
-#define GYRO //use gyro attached to arduino for tilt
+//#define GYRO //use gyro attached to arduino for tilt
 
 
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
@@ -112,7 +113,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200); //usb uart, will spit out debug messages as RTKsimple data is being parsed
-  while (!Serial);
+  //while (!Serial);
   rtc.begin(); // initialize RTC
   Serial1.begin(115200,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
   while (!Serial1);
@@ -158,6 +159,8 @@ void loop() {
     {
         //did we get a ASCII message?
         if (buffer[0]=='$'){
+          
+          
           //Serial.println(strlen(buffer));
           //Serial.println(buffer);
 
@@ -182,6 +185,7 @@ void loop() {
     } else while (mySerial.available()) //read from simpleRTK
     {
         char c = mySerial.read();
+
         buffer[cnt++] = c;
         if (c == '\n')
         {   
@@ -601,7 +605,7 @@ int parseGPGGA(const char * m)
         &chk
         );
     if (n!=15 ) {
-      Serial.print("parsing failed to retrieve all 15 variables, only received: ");
+      Serial.print("GPGGA parsing failed to retrieve all 15 variables, only received: ");
       Serial.println(n);     
       //12 is also good if DGPS is not on
     }
@@ -677,6 +681,7 @@ void GPGGA(char * m)
 
 int parseGNVTG(const char * m)
 {
+  //Serial.println(m);
   int chk=0;
   int n=sscanf(m,"$G%cVTG,%20[^,],T,,M,%20[^,],N,%20[^,],%c,%c*%x",
         &xchar,
@@ -689,8 +694,9 @@ int parseGNVTG(const char * m)
         &chk
         );
     if (n!=7) {
-      Serial.print("GNVTG parsing failed to retrieve all 7 variables, only got:");
+      Serial.print("GxVTG parsing failed to retrieve all 7 variables, only got:");
       Serial.println(n); 
+      strcpy(Tracktrue,"335.788");
     }
     strcpy(Trackmag,Tracktrue);
 
@@ -732,6 +738,8 @@ void GNVTG(char * m){
 
   
   sprintf(m, "GNVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
+  //sprintf(m, "GPVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
+
 }
 
 int parseGPZDA(const char * m)
