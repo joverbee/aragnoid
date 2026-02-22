@@ -29,6 +29,7 @@ GGA on
 VTG on
 ZDA on with factor 10 to send only every 1s
 PUBX04 on
+NAV5 dynamic model 'pedestrian' (important otherwise you get filtering of the position in time)
 
 update speed 100ms
 

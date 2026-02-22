@@ -29,7 +29,7 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 
 //comment any of these if you don't want this function
 //#define DEBUG //print parsing details                             JUY
-#define NMEAUSB //copy nmea messages also on usb uart 
+//#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
 
@@ -329,7 +329,6 @@ void loop() {
         readgyro();
       }
       #endif
-      
       lastTime=millis();
       cntzda++;
       if (cntzda>9){
@@ -340,6 +339,7 @@ void loop() {
           digitalWrite(LED_BUILTIN, toggle); 
           toggle=!toggle;
       }
+      Serial1.flush();
     }
     
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
@@ -544,8 +544,10 @@ int parsePUBX(const char * m)
         &chk
         );
     if (n!=9 ) {
-      Serial.print("parsing failed to retrieve all 9 variables, only received: ");
-      Serial.println(n);     
+      #ifdef DEBUG
+        Serial.print("parsing failed to retrieve all 9 variables, only received: ");
+        Serial.println(n);  
+      #endif   
     }
   //convert UTC_TOW to integer ms since ref week
   int sec,ms;
@@ -605,9 +607,11 @@ int parseGPGGA(const char * m)
         &chk
         );
     if (n!=15 ) {
-      Serial.print("GPGGA parsing failed to retrieve all 15 variables, only received: ");
-      Serial.println(n);     
-      //12 is also good if DGPS is not on
+      #ifdef DEBUG
+        Serial.print("GPGGA parsing failed to retrieve all 15 variables, only received: ");
+        Serial.println(n);     
+        //12 is also good if DGPS is not on
+      #endif
     }
   #ifdef DEBUG
     Serial.println("result gpggga parsing :" );
@@ -653,7 +657,7 @@ void GPGGA(char * m)
   
   //make it look more like novatel by supressing rtk specific parts
   #ifdef NORTK
-  //Quality=1; //in case ARAG doesnt like 4
+  Quality=1; //in case ARAG doesnt like 4
   strcpy(DGPSupdate,""); //novatel has these empty as there is not differential GPS
   strcpy(DGPSid,"");
   #endif
@@ -694,9 +698,11 @@ int parseGNVTG(const char * m)
         &chk
         );
     if (n!=7) {
-      Serial.print("GxVTG parsing failed to retrieve all 7 variables, only got:");
-      Serial.println(n); 
-      strcpy(Tracktrue,"335.788");
+      #ifdef DEBUG
+        Serial.print("GxVTG parsing failed to retrieve all 7 variables, only got:");
+        Serial.println(n); 
+        //strcpy(Tracktrue,"335.788");
+      #endif
     }
     strcpy(Trackmag,Tracktrue);
 
@@ -758,8 +764,10 @@ int parseGPZDA(const char * m)
         &chk
         );
     if (n!=5) {
-      Serial.print("GPZDA parsing failed to retrieve all 5 variables, only got:");
-      Serial.println(n);
+      #ifdef DEBUG
+        Serial.print("GPZDA parsing failed to retrieve all 5 variables, only got:");
+        Serial.println(n);
+      #endif
     }
     #ifdef DEBUG
     Serial.println("result ZDA parsing :" );
