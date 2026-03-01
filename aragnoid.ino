@@ -358,7 +358,8 @@ void loop() {
           digitalWrite(LED_BUILTIN, toggle); 
           toggle=!toggle;
       }
-      Serial1.flush();
+      //Serial1.flush(); //flush is a bad idea here as it will wait untill all data in buffer (64bit?) is sent
+      //while waiting we get new data in that could cause a buffer overflow on the input buffer which means we could get mixed up data
     }
     
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
