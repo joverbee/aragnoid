@@ -147,7 +147,10 @@ void setup() {
   rtc.setSeconds(0);
   updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 
-  debugtest();
+  #ifdef DEBUG
+    while (!Serial);
+    debugtest();
+  #endif
 
   //start the gyro if needed
   #ifdef GYRO
@@ -785,7 +788,7 @@ int parseGNVTG(const char * m)
         //strcpy(Tracktrue,"335.788");
       #endif
     }
-    strcpy(Trackmag,Tracktrue);
+    //strcpy(Trackmag,Tracktrue);
 
     #ifdef DEBUG
     Serial.println("result GNVTG parsing :" );
@@ -822,11 +825,7 @@ void GNVTG(char * m){
   //Tracktrue[7]='\0';
   //Trackmag[6]='0';
   //Trackmag[7]='\0';
-
-  
-  sprintf(m, "GNVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
-  //sprintf(m, "GPVTG,%s,T,%s,M,%s,N,%s,%c,%c",Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
-
+  sprintf(m, "G%cVTG,%s,T,%s,M,%s,N,%s,%c,%c",xchar,Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
 }
 
 int parseGPZDA(const char * m)
@@ -927,8 +926,19 @@ void debugtest()
   Serial.println(n);
   
   const char* atestGNVTG= "$GPVTG,335.788,T,,M,0.019,N,0.036,K,D*2B";
+  Serial.println(atestGNVTG);
   n=parseGNVTG(atestGNVTG);
   Serial.println(n);
+  GNVTG(msg);
+  Serial.println(msg);
+
+  const char* atestGNVTG2= "$GNVTG,140.88,T,,M,8.04,N,14.89,K,D*05";
+  Serial.println(atestGNVTG2);
+  n=parseGNVTG(atestGNVTG2);
+  Serial.println(n);
+  GNVTG(msg);
+  Serial.println(msg);
+
 
   const char* atestGPZDA= "$GPZDA,152027.40,05,02,2023,00,00*65";
   n=parseGPZDA(atestGPZDA);
@@ -948,6 +958,7 @@ void debugtest()
   const char* testGPZDA= "$GPZDA,142436.00,05,02,2023,,*64";
   n=parseGPZDA(testGPZDA);
   Serial.println(n);
+
 
   const char* testPUBX= "$PUBX,04,073731.00,091202,113851.00,1196,113851.00,1930035,-2660.664,43*3C";
   n=parsePUBX(testPUBX);
