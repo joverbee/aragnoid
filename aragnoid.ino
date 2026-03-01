@@ -54,6 +54,20 @@ char unitchar;
 char HWGS84[STRINGSINGLE];
 char DGPSupdate[STRINGSINGLE];
 char DGPSid[STRINGSINGLE];
+
+char oldTime[STRINGSINGLE];
+char oldLatitude[STRINGSINGLE];
+char oldNSchar;
+char oldLongitude[STRINGSINGLE];
+char oldEWchar;
+int oldQuality,oldNSat;
+char oldHDOP[STRINGSINGLE];
+char oldAltitude[STRINGSINGLE];
+char oldunitchar;
+char oldHWGS84[STRINGSINGLE];
+char oldDGPSupdate[STRINGSINGLE];
+char oldDGPSid[STRINGSINGLE];
+
 //VTG
 char Tracktrue[STRINGSINGLE];
 char Trackmag[STRINGSINGLE];
@@ -100,7 +114,7 @@ int cntzda=0;
 char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
-
+const int trig = 5;
 
 
 /* Set the delay between fresh samples */
@@ -113,7 +127,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200); //usb uart, will spit out debug messages as RTKsimple data is being parsed
-  //while (!Serial);
+  //while (!Serial); //don't wait for serial as this would block the startup when no usb is connected
   rtc.begin(); // initialize RTC
   Serial1.begin(115200,SERIAL_8E1); //RX and TX on pin 13/14 , this is the connection to ARAG
   while (!Serial1);
@@ -125,6 +139,8 @@ void setup() {
   pinPeripheral(0, PIO_SERCOM); //Assign TX function to pin 0
   
   pinMode(LED_BUILTIN, OUTPUT);
+  
+  pinMode(trig, OUTPUT);
   
   rtc.setHours(12);
   rtc.setMinutes(0);
@@ -470,6 +486,7 @@ void sendOK(){
   Serial1.println(); //\r\n
   Serial1.println("<OK"); //end with \r\n
   Serial1.print("[COM1]"); //no ending with \r\n
+  Serial1.flush();
 }
 void parseARAGcommands(const char* msg){
   //react to ARAG commands
@@ -585,10 +602,49 @@ int parsePUBX(const char * m)
   return n;
 }
 
+void store()
+{
+  strcpy(oldTime,Time);
+  strcpy(oldLatitude,Latitude);
+  oldNSchar=NSchar;
+  strcpy(oldLongitude,Longitude);
+  oldEWchar=EWchar;
+  oldQuality=Quality;
+  oldNSat=NSat;
+  strcpy(oldHDOP,HDOP);
+  strcpy(oldAltitude,Altitude);
+  oldunitchar=unitchar;
+  strcpy(oldHWGS84,HWGS84);
+  strcpy(oldDGPSupdate,DGPSupdate);
+  strcpy(oldDGPSid,DGPSid);
+}
+
+void restore()
+{
+  strcpy(Time,oldTime);
+  strcpy(Latitude,oldLatitude);
+  NSchar=oldNSchar;
+  strcpy(Longitude,oldLongitude);
+  EWchar=oldEWchar;
+  Quality=oldQuality;
+  NSat=oldNSat;
+  strcpy(HDOP,oldHDOP);
+  strcpy(Altitude,oldAltitude);
+  unitchar=oldunitchar;
+  strcpy(HWGS84,oldHWGS84);
+  strcpy(DGPSupdate,oldDGPSupdate);
+  strcpy(DGPSid,oldDGPSid);
+}
+
 
 int parseGPGGA(const char * m)
 {
+  if (strlen(m)!=86){
+    digitalWrite(trig,1);
+    digitalWrite(trig,0);
+  }
   int chk=0;
+  store();
   int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%x",
         Time,
         Latitude,
@@ -612,6 +668,7 @@ int parseGPGGA(const char * m)
         Serial.println(n);     
         //12 is also good if DGPS is not on
       #endif
+
     }
   #ifdef DEBUG
     Serial.println("result gpggga parsing :" );
@@ -647,6 +704,22 @@ int parseGPGGA(const char * m)
     Serial.println(chk);
     #endif
 
+    
+
+    if ((n<12)){
+      
+
+      restore();
+      Serial.println("restoring data, received less than 12 valid GPGGA data");
+      Serial.println("Lon/Lat van ardusimple:");
+      Serial.print(Longitude);
+      Serial.print("::");
+      Serial.println(Latitude);
+      Serial.println("Received from ardusimple:");
+      Serial.println(m);
+      digitalWrite(trig,0);
+    }
+
     //check if all could be read
     //check if checksum was correct?
   return n;
@@ -661,6 +734,12 @@ void GPGGA(char * m)
   strcpy(DGPSupdate,""); //novatel has these empty as there is not differential GPS
   strcpy(DGPSid,"");
   #endif
+
+  //Serial.println("Lon/Lat naar arag:");
+  //Serial.print(Longitude);
+  //Serial.print("::");
+  //Serial.println(Latitude);
+
 
   sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", Time,
                                                               Latitude,
@@ -679,6 +758,8 @@ void GPGGA(char * m)
   
   //202530.00,5109.0262,N,11401.8407,W,5,40,0.5,1097.36,M,-17.00,M,18,TSTR"; //checksum should be 61
   //mySerial.println(msg);
+
+  //Serial.println(m);
 
   
 }
