@@ -113,7 +113,7 @@ int cntzda=0;
 
 char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
-char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
+char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages to arag
 const int trig = 5;
 
 
@@ -216,7 +216,7 @@ void loop() {
             cnt = 0;
             
         }
-        else if (cnt == sizeof(buffer)-1){
+        else if (cnt >= sizeof(buffer)-1){//buffer overflow
           cnt=0;
           buffer[0]='\0';
           ready=false;
