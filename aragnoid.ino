@@ -115,7 +115,7 @@ char msg[MAXMESSAGESIZE]; //a buffer that will get the msg contents
 char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RTKsimple
 char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages to arag
 const int trig = 5;
-
+const int trig2 = 4;
 
 /* Set the delay between fresh samples */
 #define BNO055_SAMPLERATE_DELAY_MS (100)
@@ -139,8 +139,9 @@ void setup() {
   pinPeripheral(0, PIO_SERCOM); //Assign TX function to pin 0
   
   pinMode(LED_BUILTIN, OUTPUT);
-  
   pinMode(trig, OUTPUT);
+  pinMode(trig2, OUTPUT); //trigger while receiving RTK commands
+
   
   rtc.setHours(12);
   rtc.setMinutes(0);
@@ -187,13 +188,27 @@ void loop() {
           //Serial.println(buffer);
 
           if(buffer[3] == 'G'){
-              parseGPGGA(buffer);            
+              parseGPGGA(buffer); 
+              //send it to arag as soon as received
+              GPGGA(msg);
+              sendnmea(msg); //non blocking, can send this long message while we are already receiving the next
           }else if(buffer[3] == 'V'){
               parseGNVTG(buffer);
+              //send it to arag as soon as received
+              GNVTG(msg);
+              sendnmea(msg); //non blocking
           }else if(buffer[3] == 'Z'){
               parseGPZDA(buffer);
+              //send it to arag as soon as received, should only happen at 0.1Hz
+              GPZDA(msg);
+              sendnmea(msg); //1 Hz
+              sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
+              digitalWrite(LED_BUILTIN, toggle); 
+              toggle=!toggle;
+
           }else if(buffer[3] == 'B'){
               parsePUBX(buffer);
+              //not sending this one, we might as well not send it on ardusimple either
           }
         }
         else {
@@ -203,8 +218,11 @@ void loop() {
         ready = false;
     } else while (mySerial.available()) //read from simpleRTK
     {
+        digitalWrite(trig2,1); //trigger pulse while reading RTK input
+        //if (mySerial.available() == SERIAL_RX_BUFFER_SIZE){ // Just to be general, 64 bytes in most cases
+            //buffer is overrun, do what u will
+        //}
         char c = mySerial.read();
-
         buffer[cnt++] = c;
         if (c == '\n')
         {   
@@ -225,6 +243,8 @@ void loop() {
           ready=false;
         }
     }
+    digitalWrite(trig2,0);
+    
 
 //listen to ARAG messages during startup
   if (receivedarag)
@@ -331,37 +351,7 @@ void loop() {
           cntarag = 0;
           receivedaragbinary=false;
         }
-    }
-
-
-
-
-
-    //send to ARAG messages based on the global coordinates that we filled in from the parsed data
-    if ( millis() - lastTime > 100){
-      GNVTG(msg);
-      sendnmea(msg); //10Hz
-      GPGGA(msg);
-      sendnmea(msg);
-      #ifdef GYRO
-      if (gyro) {
-        readgyro();
-      }
-      #endif
-      lastTime=millis();
-      cntzda++;
-      if (cntzda>9){
-          GPZDA(msg);
-          sendnmea(msg); //1 Hz
-          sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
-          cntzda=0;
-          digitalWrite(LED_BUILTIN, toggle); 
-          toggle=!toggle;
-      }
-      //Serial1.flush(); //flush is a bad idea here as it will wait untill all data in buffer (64bit?) is sent
-      //while waiting we get new data in that could cause a buffer overflow on the input buffer which means we could get mixed up data
-    }
-    
+    }    
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 }
 
