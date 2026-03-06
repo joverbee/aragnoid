@@ -28,7 +28,8 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print parsing details                             JUY
+#define DEBUG //print some debug messages                             JUY
+//#define DEBUGDETAIL //print parsing details
 //#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
@@ -262,7 +263,7 @@ void loop() {
       //fill in reference week 2 byte , little endian
       response[14]=currtime.UTC_Week & 0x00FF;
       response[15]=currtime.UTC_Week>>8 & 0x00FF;
-      #ifdef DEBUG                               
+      #ifdef DEBUGDETAIL                            
       Serial.print("ref week binary:");
       Serial.print(response[14],HEX);
       Serial.print(response[15],HEX);
@@ -273,7 +274,7 @@ void loop() {
       response[17]=currtime.UTC_ms>>8 & 0x000000FF;
       response[18]=currtime.UTC_ms>>16  & 0x000000FF;
       response[19]=currtime.UTC_ms>>24     & 0x000000FF;
-      #ifdef DEBUG
+      #ifdef DEBUGDETAIL
       Serial.print("ref UTC_ms binary:");
       Serial.print(response[16],HEX);
       Serial.print(response[17],HEX);
@@ -286,7 +287,7 @@ void loop() {
       response[35]=crc32_res>>8   & 0x000000FF;
       response[36]=crc32_res>>16  & 0x000000FF;
       response[37]=crc32_res>>24  & 0x000000FF;
-      #ifdef DEBUG
+      #ifdef DEBUGDETAIL
       Serial.print("crc32 binary:");
       Serial.print(response[34],HEX);
       Serial.print(response[35],HEX);
@@ -369,7 +370,7 @@ void sendbinary(){
   //fill in reference week 2 byte , little endian
   binmsg[14]=currtime.UTC_Week & 0x00FF;
   binmsg[15]=currtime.UTC_Week>>8 & 0x00FF;
-  #ifdef DEBUG                               
+  #ifdef DEBUGDETAIL                              
   Serial.print("ref week binary:");
   Serial.print(binmsg[14],HEX);
   Serial.print(binmsg[15],HEX);
@@ -380,7 +381,7 @@ void sendbinary(){
   binmsg[17]=currtime.UTC_ms>>8 & 0x000000FF;
   binmsg[18]=currtime.UTC_ms>>16  & 0x000000FF;
   binmsg[19]=currtime.UTC_ms>>24     & 0x000000FF;
-  #ifdef DEBUG
+  #ifdef DEBUGDETAIL
   Serial.print("ref UTC_ms binary:");
   Serial.print(binmsg[16],HEX);
   Serial.print(binmsg[17],HEX);
@@ -435,9 +436,6 @@ void sendbinary(){
   binmsg[id++]=TiltYpointer[7];
 #endif
 
-#ifdef DEBUG
-#endif
-
 
   //and recalc the CRC32 
   //uint32_t const crc32_res = crc32.calc((uint8_t const *)binmsg, sizeof(binmsg)-4);
@@ -448,7 +446,7 @@ void sendbinary(){
   binmsg[85]=crc32_res>>8   & 0x000000FF;
   binmsg[86]=crc32_res>>16  & 0x000000FF;
   binmsg[87]=crc32_res>>24  & 0x000000FF;
-  #ifdef DEBUG
+  #ifdef DEBUGDETAIL
   Serial.print("crc32 binary:");
   Serial.print(binmsg[84],HEX);
   Serial.print(binmsg[85],HEX);
@@ -562,7 +560,7 @@ int parsePUBX(const char * m)
     currtime.UTC_ms=sec*1000+ms*10; //assuming 2 digit
   }
   
-  #ifdef DEBUG
+  #ifdef DEBUGDDETAIL
     Serial.println("result pubx04 parsing :" );
     Serial.print("Time : ");
     Serial.println(currtime.Hms);
@@ -646,7 +644,7 @@ int parseGPGGA(const char * m)
     digitalWrite(trig,0);
   }
 
-  #ifdef DEBUG
+  #ifdef DEBUGDETAIL
     Serial.println("result gpggga parsing :" );
     Serial.print("Time : ");
     Serial.println(temppos.Time);
@@ -751,10 +749,20 @@ int parseGNVTG(const char * m)
       if (delta>=360.0){delta-=360.0;}
       //now check if delta closer to 180, this would mean we went into reverse
       if ((delta>90.0) and (delta<270.0)){
-        newheading+=180;
+        Serial.println("Correcting direction");
+        tempheading.fwd=false;
+      }
+      else{
+        tempheading.fwd=true;
+      }
+      if (tempheading.fwd){
+        Serial.println("Forward");
+      }
+      else{
+        Serial.println("Reverse");
+        newheading+=180.0;
         if (newheading>=360.0){newheading-=360.0;}
-        tempheading.fwd!=tempheading.fwd;
-        sprintf(tempheading.Tracktrue,"%.3f",newheading);
+        sprintf(tempheading.Tracktrue,"%s",String(newheading, 3).c_str());
       }
 
       #ifdef DEBUG
@@ -764,15 +772,17 @@ int parseGNVTG(const char * m)
         Serial.println(newheading);
         Serial.print("delta:");
         Serial.println(delta);
+        Serial.print("tempheading.Tracktrue:");
+        Serial.println(tempheading.Tracktrue);
 
       #endif
-      currheading=tempheading;
+    currheading=tempheading;
 
     }
 
     //strcpy(Trackmag,Tracktrue);
 
-    #ifdef DEBUG
+    #ifdef DEBUGDETAIL
     Serial.println("result GNVTG parsing :" );
     Serial.print("xchar : ");
     Serial.println(tempheading.xchar);
@@ -835,7 +845,7 @@ int parseGPZDA(const char * m)
       currtime=temptime;
       strcpy(currpos.Time,temppos.Time);
     }
-    #ifdef DEBUG
+    #ifdef DEBUGDETAIL
     Serial.println("result ZDA parsing :" );
     Serial.print("Time : ");
     Serial.println(temppos.Time);
@@ -960,6 +970,39 @@ void debugtest()
   Serial.println("binary message");  
   Serial.write(bintestARAG,64);
   Serial.println();
+
+
+  //testing reversing
+  
+  //driving forward
+  Serial.println("driving Forward");
+  char* test= "$GNVTG,335.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,345.388,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,355.748,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,5.535,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  Serial.println("driving Backward");
+  test= "$GNVTG,182.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,183.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,184.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,185.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  Serial.println("Forward again");
+  test= "$GNVTG,7.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,10.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+  test= "$GNVTG,25.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
+  n=parseGNVTG(test);
+
+
+
 
   Serial.println("end of test code");
 
