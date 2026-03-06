@@ -28,7 +28,7 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-//#define DEBUG //print parsing details                             JUY
+#define DEBUG //print parsing details                             JUY
 //#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
@@ -37,59 +37,54 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
 #define HEADER 28 //size of binary header in bytes
 
-
-//global coordinates
-//store long and lat as char strings
-//we will not do calculations with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
-//this also solves the fact that Arduino has difficulty in dealing with floats in printf and scanf
-char Time[STRINGSINGLE];
-char Latitude[STRINGSINGLE];
-char NSchar;
-char Longitude[STRINGSINGLE];
-char EWchar;
-int Quality,NSat;
-char HDOP[STRINGSINGLE];
-char Altitude[STRINGSINGLE];
-char unitchar;
-char HWGS84[STRINGSINGLE];
-char DGPSupdate[STRINGSINGLE];
-char DGPSid[STRINGSINGLE];
-
-char oldTime[STRINGSINGLE];
-char oldLatitude[STRINGSINGLE];
-char oldNSchar;
-char oldLongitude[STRINGSINGLE];
-char oldEWchar;
-int oldQuality,oldNSat;
-char oldHDOP[STRINGSINGLE];
-char oldAltitude[STRINGSINGLE];
-char oldunitchar;
-char oldHWGS84[STRINGSINGLE];
-char oldDGPSupdate[STRINGSINGLE];
-char oldDGPSid[STRINGSINGLE];
-
-//VTG
-char Tracktrue[STRINGSINGLE];
-char Trackmag[STRINGSINGLE];
-char Knots[STRINGSINGLE];
-char Speed[STRINGSINGLE];
-char Speedunits='K';
-char Modechar='D';
-char xchar='P'; 
-//ZDA
-int Day=0;
-int Month=0;
-int Year=0;
-//PUBX04
-char Hms[STRINGSINGLE];
-char Dmy[STRINGSINGLE];
-char UTC_TOW[STRINGSINGLE];
-unsigned long UTC_ms = 0;
-int UTC_Week;
-char Reserved[STRINGSINGLE];
-char Clk_B[STRINGSINGLE];
-char Clk_D[STRINGSINGLE];
-int PG;
+struct Coordinate {   
+  //global coordinates
+  //store long and lat as char strings
+  //we will not do calculations with these numbers and we need to preserve a number of digits greater than Arduino double (=float) can store
+  //this also solves the fact that Arduino has difficulty in dealing with floats in printf and scanf
+  char Time[STRINGSINGLE];
+  char Latitude[STRINGSINGLE];
+  char NSchar;
+  char Longitude[STRINGSINGLE];
+  char EWchar;
+  int Quality,NSat;
+  char HDOP[STRINGSINGLE];
+  char Altitude[STRINGSINGLE];
+  char unitchar,unitchar2;
+  char HWGS84[STRINGSINGLE];
+  char DGPSupdate[STRINGSINGLE];
+  char DGPSid[STRINGSINGLE];
+};
+struct Heading{
+  //Headingd data, store as string
+  char Tracktrue[STRINGSINGLE];
+  char Trackmag[STRINGSINGLE];
+  char Knots[STRINGSINGLE];
+  char Speed[STRINGSINGLE];
+  char Speedunits='K';
+  char Modechar='D';
+  char xchar='P'; 
+  bool fwd=true; //driving forward or in reverse
+};
+struct Timestruct{
+  //ZDA
+  int Day=0;
+  int Month=0;
+  int Year=0;
+  //PUBX04
+  char Hms[STRINGSINGLE];
+  char Dmy[STRINGSINGLE];
+  char UTC_TOW[STRINGSINGLE];
+  unsigned long UTC_ms = 0;
+  int UTC_Week;
+  char Reserved[STRINGSINGLE];
+  char Clk_B[STRINGSINGLE];
+  char Clk_D[STRINGSINGLE];
+  int PG;
+};
+Coordinate currpos,temppos;
+Heading currheading,tempheading;
+Timestruct currtime,temptime;
 
 //GYRO
 double AccX=0.0; //acceleration in X direction m/s^2
@@ -98,7 +93,7 @@ double TiltX=0.0; //tilt in X direction in degrees
 double TiltY=0.0; //tilt in Y direction in degrees
 bool gyro=false;
 
-
+//general
 bool toggle=true;
 bool ready=false;
 bool receivedarag=false;
@@ -265,8 +260,8 @@ void loop() {
         0x00,0x00,0x12,0x00,0x01,0x00,0x00,0x00, //reserved=0000, sw version=0012, payload bytes: 01 00 00 4F 4B no idea what they mean
         0x4F,0x4B,0x9D,0x38,0x92,0xFE}; //crc
       //fill in reference week 2 byte , little endian
-      response[14]=UTC_Week & 0x00FF;
-      response[15]=UTC_Week>>8 & 0x00FF;
+      response[14]=currtime.UTC_Week & 0x00FF;
+      response[15]=currtime.UTC_Week>>8 & 0x00FF;
       #ifdef DEBUG                               
       Serial.print("ref week binary:");
       Serial.print(response[14],HEX);
@@ -274,10 +269,10 @@ void loop() {
       Serial.println();
       #endif 
       //fill in GPSms ms since ref week 4byte, little endian
-      response[16]=UTC_ms & 0x000000FF;
-      response[17]=UTC_ms>>8 & 0x000000FF;
-      response[18]=UTC_ms>>16  & 0x000000FF;
-      response[19]=UTC_ms>>24     & 0x000000FF;
+      response[16]=currtime.UTC_ms & 0x000000FF;
+      response[17]=currtime.UTC_ms>>8 & 0x000000FF;
+      response[18]=currtime.UTC_ms>>16  & 0x000000FF;
+      response[19]=currtime.UTC_ms>>24     & 0x000000FF;
       #ifdef DEBUG
       Serial.print("ref UTC_ms binary:");
       Serial.print(response[16],HEX);
@@ -372,8 +367,8 @@ void sendbinary(){
     0x00,0x00,0x00,0x00,0xC6,0x43,0x16,0x5F}; //last 4 bytes is CRC32 checksum
 
   //fill in reference week 2 byte , little endian
-  binmsg[14]=UTC_Week & 0x00FF;
-  binmsg[15]=UTC_Week>>8 & 0x00FF;
+  binmsg[14]=currtime.UTC_Week & 0x00FF;
+  binmsg[15]=currtime.UTC_Week>>8 & 0x00FF;
   #ifdef DEBUG                               
   Serial.print("ref week binary:");
   Serial.print(binmsg[14],HEX);
@@ -381,10 +376,10 @@ void sendbinary(){
   Serial.println();
   #endif 
   //fill in GPSms ms since ref week 4byte, little endian
-  binmsg[16]=UTC_ms & 0x000000FF;
-  binmsg[17]=UTC_ms>>8 & 0x000000FF;
-  binmsg[18]=UTC_ms>>16  & 0x000000FF;
-  binmsg[19]=UTC_ms>>24     & 0x000000FF;
+  binmsg[16]=currtime.UTC_ms & 0x000000FF;
+  binmsg[17]=currtime.UTC_ms>>8 & 0x000000FF;
+  binmsg[18]=currtime.UTC_ms>>16  & 0x000000FF;
+  binmsg[19]=currtime.UTC_ms>>24     & 0x000000FF;
   #ifdef DEBUG
   Serial.print("ref UTC_ms binary:");
   Serial.print(binmsg[16],HEX);
@@ -467,13 +462,13 @@ void updatetime(){
   //fill time from a local real time clock running on Arduino
   //in real operation we want the clock to be given by the gps and NOT by the inacurate rtc
   //use only for debugging purposes
-  sprintf(Time,"%2d%2d%2d.00",rtc.getHours(),rtc.getMinutes(),rtc.getSeconds()); //no millisecond in rtc
+  sprintf(currpos.Time,"%2d%2d%2d.00",rtc.getHours(),rtc.getMinutes(),rtc.getSeconds()); //no millisecond in rtc
   Serial.print("Time=");
 
 
-  Day=rtc.getDay();
-  Month=rtc.getMonth();
-  Year=rtc.getYear();
+  currtime.Day=rtc.getDay();
+  currtime.Month=rtc.getMonth();
+  currtime.Year=rtc.getYear();
 }
 
 void sendOK(){
@@ -544,14 +539,14 @@ int parsePUBX(const char * m)
   //$PUBX,04,hhmmss.ss,ddmmyy,UTC_TOW,week,reserved,Clk_B,Clk_D,PG*hh<CR><LF>
   int chk=0;
   int n=sscanf(m,"$PUBX,04,%20[^,],%20[^,],%20[^,],%d,%20[^,],%20[^,],%20[^,],%d*%x",
-        Hms,
-        Dmy,
-        UTC_TOW,
-        &UTC_Week,
-        Reserved,
-        Clk_B,
-        Clk_D,
-        &PG,
+        currtime.Hms,
+        currtime.Dmy,
+        currtime.UTC_TOW,
+        &currtime.UTC_Week,
+        currtime.Reserved,
+        currtime.Clk_B,
+        currtime.Clk_D,
+        &currtime.PG,
         &chk
         );
     if (n!=9 ) {
@@ -562,74 +557,38 @@ int parsePUBX(const char * m)
     }
   //convert UTC_TOW to integer ms since ref week
   int sec,ms;
-  int m2=sscanf(UTC_TOW,"%d.%d",&sec,&ms);
+  int m2=sscanf(currtime.UTC_TOW,"%d.%d",&sec,&ms);
   if (m2==2){
-    UTC_ms=sec*1000+ms*10; //assuming 2 digit
+    currtime.UTC_ms=sec*1000+ms*10; //assuming 2 digit
   }
   
   #ifdef DEBUG
     Serial.println("result pubx04 parsing :" );
     Serial.print("Time : ");
-    Serial.println(Hms);
+    Serial.println(currtime.Hms);
     Serial.print("Dmy : ");
-    Serial.println(Dmy);
+    Serial.println(currtime.Dmy);
     Serial.print("UTC_TOW : ");
-    Serial.println(UTC_TOW);
+    Serial.println(currtime.UTC_TOW);
     Serial.print("UTC_ms converted from UTC_TOW : ");
-    Serial.println(UTC_ms);
+    Serial.println(currtime.UTC_ms);
     Serial.print("UTC_Week : ");
-    Serial.println(UTC_Week);
+    Serial.println(currtime.UTC_Week);
     Serial.print("Reserved : ");
-    Serial.println(Reserved);
+    Serial.println(currtime.Reserved);
     Serial.print("Clk_B : ");
-    Serial.println(Clk_B);
+    Serial.println(currtime.Clk_B);
     Serial.print("Clk_D : ");
-    Serial.println(Clk_D);
+    Serial.println(currtime.Clk_D);
     Serial.print("PG : ");
-    Serial.println(PG);
+    Serial.println(currtime.PG);
     Serial.print("chk : ");
     Serial.println(chk);
     #endif
-
     //check if all could be read
     //check if checksum was correct?
   return n;
 }
-
-void store()
-{
-  strcpy(oldTime,Time);
-  strcpy(oldLatitude,Latitude);
-  oldNSchar=NSchar;
-  strcpy(oldLongitude,Longitude);
-  oldEWchar=EWchar;
-  oldQuality=Quality;
-  oldNSat=NSat;
-  strcpy(oldHDOP,HDOP);
-  strcpy(oldAltitude,Altitude);
-  oldunitchar=unitchar;
-  strcpy(oldHWGS84,HWGS84);
-  strcpy(oldDGPSupdate,DGPSupdate);
-  strcpy(oldDGPSid,DGPSid);
-}
-
-void restore()
-{
-  strcpy(Time,oldTime);
-  strcpy(Latitude,oldLatitude);
-  NSchar=oldNSchar;
-  strcpy(Longitude,oldLongitude);
-  EWchar=oldEWchar;
-  Quality=oldQuality;
-  NSat=oldNSat;
-  strcpy(HDOP,oldHDOP);
-  strcpy(Altitude,oldAltitude);
-  unitchar=oldunitchar;
-  strcpy(HWGS84,oldHWGS84);
-  strcpy(DGPSupdate,oldDGPSupdate);
-  strcpy(DGPSid,oldDGPSid);
-}
-
 
 int parseGPGGA(const char * m)
 {
@@ -638,82 +597,88 @@ int parseGPGGA(const char * m)
     digitalWrite(trig,0);
   }
   int chk=0;
-  store();
   int n=sscanf(m,"$GPGGA,%20[^,],%20[^,],%c,%20[^,],%c,%d,%d,%20[^,],%20[^,],%c,%20[^,],%c,%20[^,],%20[^*]*%x",
-        Time,
-        Latitude,
-        &NSchar,
-        Longitude,
-        &EWchar,
-        &Quality,
-        &NSat,
-        HDOP,
-        Altitude,
-        &unitchar,
-        HWGS84,
-        &unitchar,
-        DGPSupdate,
-        DGPSid,
+        temppos.Time,
+        temppos.Latitude,
+        &temppos.NSchar,
+        temppos.Longitude,
+        &temppos.EWchar,
+        &temppos.Quality,
+        &temppos.NSat,
+        temppos.HDOP,
+        temppos.Altitude,
+        &temppos.unitchar,
+        temppos.HWGS84,
+        &temppos.unitchar2,
+        temppos.DGPSupdate,
+        temppos.DGPSid,
         &chk
         );
     if (n!=15 ) {
       #ifdef DEBUG
         Serial.print("GPGGA parsing failed to retrieve all 15 variables, only received: ");
         Serial.println(n);     
-        //12 is also good if DGPS is not on
+       
       #endif
+      
 
     }
+  if (n>11){
+      //12 is also good if DGPS is not on
+      currpos=temppos;
+      //make it look more like novatel by supressing rtk specific parts
+      #ifdef NORTK
+        currpos.Quality=1; //in case ARAG doesnt like 4
+        strcpy(currpos.DGPSupdate,""); //novatel has these empty as there is not differential GPS
+        strcpy(currpos.DGPSid,"");
+      #endif
+  }
+  else{
+    #ifdef DEBUG
+        Serial.println("GPGGA parsing failed:keeping old position ");    
+    #endif    
+    Serial.println("Lon/Lat van ardusimple:");
+    Serial.print(currpos.Longitude);
+    Serial.print("::");
+    Serial.println(currpos.Latitude);
+    Serial.println("Received from ardusimple:");
+    Serial.println(m);
+    digitalWrite(trig,0);
+  }
+
   #ifdef DEBUG
     Serial.println("result gpggga parsing :" );
     Serial.print("Time : ");
-    Serial.println(Time);
+    Serial.println(temppos.Time);
     Serial.print("Latitude : ");
-    Serial.println(Latitude);
-    Serial.print("&NSchar : ");
-    Serial.println(&NSchar);
+    Serial.println(temppos.Latitude);
+    Serial.print("NSchar : ");
+    Serial.println(temppos.NSchar);
     Serial.print("Longitude : ");
-    Serial.println(Longitude);
+    Serial.println(temppos.Longitude);
     Serial.print("EWchar : ");
-    Serial.println(&EWchar);
+    Serial.println(temppos.EWchar);
     Serial.print("Quality : ");
-    Serial.println(Quality);
+    Serial.println(temppos.Quality);
     Serial.print("NSat : ");
-    Serial.println(NSat);
+    Serial.println(temppos.NSat);
     Serial.print("HDOP : ");
-    Serial.println(HDOP);
+    Serial.println(temppos.HDOP);
     Serial.print("Altitude : ");
-    Serial.println(Altitude);
+    Serial.println(temppos.Altitude);
     Serial.print("unitchar : ");
-    Serial.println(&unitchar);
+    Serial.println(temppos.unitchar);
     Serial.print("HWGS84 : ");
-    Serial.println(HWGS84);
+    Serial.println(temppos.HWGS84);
     Serial.print("unitchar : ");
-    Serial.println(&unitchar);
+    Serial.println(temppos.unitchar2);
     Serial.print("DGPSupdate : ");
-    Serial.println(DGPSupdate);
+    Serial.println(temppos.DGPSupdate);
     Serial.print("DGPSid : ");
-    Serial.println(DGPSid);
+    Serial.println(temppos.DGPSid);
     Serial.print("chk : ");
     Serial.println(chk);
     #endif
-
-    
-
-    if ((n<12)){
-      
-
-      restore();
-      Serial.println("restoring data, received less than 12 valid GPGGA data");
-      Serial.println("Lon/Lat van ardusimple:");
-      Serial.print(Longitude);
-      Serial.print("::");
-      Serial.println(Latitude);
-      Serial.println("Received from ardusimple:");
-      Serial.println(m);
-      digitalWrite(trig,0);
-    }
-
     //check if all could be read
     //check if checksum was correct?
   return n;
@@ -722,12 +687,7 @@ void GPGGA(char * m)
 {
   //prepare GPGGA msg depending on global position variables 
   
-  //make it look more like novatel by supressing rtk specific parts
-  #ifdef NORTK
-  Quality=1; //in case ARAG doesnt like 4
-  strcpy(DGPSupdate,""); //novatel has these empty as there is not differential GPS
-  strcpy(DGPSid,"");
-  #endif
+  
 
   //Serial.println("Lon/Lat naar arag:");
   //Serial.print(Longitude);
@@ -735,20 +695,20 @@ void GPGGA(char * m)
   //Serial.println(Latitude);
 
 
-  sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", Time,
-                                                              Latitude,
-                                                              NSchar,
-                                                              Longitude,
-                                                              EWchar,
-                                                              Quality,
-                                                              NSat,
-                                                              HDOP, 
-                                                              Altitude,
-                                                              unitchar,
-                                                              HWGS84,
-                                                              unitchar,
-                                                              DGPSupdate,
-                                                              DGPSid);
+  sprintf(m, "GPGGA,%s,%s,%c,%s,%c,%d,%d,%s,%s,%c,%s,%c,%s,%s", currpos.Time,
+                                                              currpos.Latitude,
+                                                              currpos.NSchar,
+                                                              currpos.Longitude,
+                                                              currpos.EWchar,
+                                                              currpos.Quality,
+                                                              currpos.NSat,
+                                                              currpos.HDOP, 
+                                                              currpos.Altitude,
+                                                              currpos.unitchar,
+                                                              currpos.HWGS84,
+                                                              currpos.unitchar,
+                                                              currpos.DGPSupdate,
+                                                              currpos.DGPSid);
   
   //202530.00,5109.0262,N,11401.8407,W,5,40,0.5,1097.36,M,-17.00,M,18,TSTR"; //checksum should be 61
   //mySerial.println(msg);
@@ -763,40 +723,71 @@ int parseGNVTG(const char * m)
   //Serial.println(m);
   int chk=0;
   int n=sscanf(m,"$G%cVTG,%20[^,],T,,M,%20[^,],N,%20[^,],%c,%c*%x",
-        &xchar,
-        Tracktrue,
-        //Trackmag,
-        Knots,
-        Speed,
-        &Speedunits,
-        &Modechar,
+        &tempheading.xchar,
+        tempheading.Tracktrue,
+        //tempheading.Trackmag,
+        tempheading.Knots,
+        tempheading.Speed,
+        &tempheading.Speedunits,
+        &tempheading.Modechar,
         &chk
         );
     if (n!=7) {
       #ifdef DEBUG
-        Serial.print("GxVTG parsing failed to retrieve all 7 variables, only got:");
+        Serial.print("GxVTG parsing failed to retrieve all 8 variables, only got:");
         Serial.println(n); 
         //strcpy(Tracktrue,"335.788");
       #endif
     }
+    if (n>=7){
+      //update only if correclty received
+
+      //check for reversed
+       char * end_ptr;
+      double oldheading=strtof(currheading.Tracktrue,&end_ptr);
+      double newheading=strtof(tempheading.Tracktrue,&end_ptr);
+      double delta=oldheading-newheading;
+      if (delta<0.0){delta+=360.0;}
+      if (delta>=360.0){delta-=360.0;}
+      //now check if delta closer to 180, this would mean we went into reverse
+      if ((delta>90.0) and (delta<270.0)){
+        newheading+=180;
+        if (newheading>=360.0){newheading-=360.0;}
+        tempheading.fwd!=tempheading.fwd;
+        sprintf(tempheading.Tracktrue,"%.3f",newheading);
+      }
+
+      #ifdef DEBUG
+        Serial.print("oldheading:");
+        Serial.println(oldheading);
+        Serial.print("newheading:");
+        Serial.println(newheading);
+        Serial.print("delta:");
+        Serial.println(delta);
+
+      #endif
+      currheading=tempheading;
+
+    }
+
     //strcpy(Trackmag,Tracktrue);
 
     #ifdef DEBUG
     Serial.println("result GNVTG parsing :" );
     Serial.print("xchar : ");
-    Serial.println(xchar);
+    Serial.println(tempheading.xchar);
     Serial.print("Tracktrue : ");
-    Serial.println(Tracktrue);
+    Serial.println(tempheading.Tracktrue);
     Serial.print("Trackmag : ");
-    Serial.println(Trackmag);
+    Serial.println(tempheading.Trackmag);
     Serial.print("Knots : ");
-    Serial.println(Knots);
+    Serial.println(tempheading.Knots);
     Serial.print("Speed : ");
-    Serial.println(Speed);
+    Serial.println(tempheading.Speed);
     Serial.print("Speedunits : ");
-    Serial.println(Speedunits);
+    Serial.println(tempheading.Speedunits);
     Serial.print(" Modechar : ");
-    Serial.println( Modechar);
+    Serial.println( tempheading.Modechar);
     Serial.print("chk : ");
     Serial.println(chk);
     #endif
@@ -816,7 +807,7 @@ void GNVTG(char * m){
   //Tracktrue[7]='\0';
   //Trackmag[6]='0';
   //Trackmag[7]='\0';
-  sprintf(m, "G%cVTG,%s,T,%s,M,%s,N,%s,%c,%c",xchar,Tracktrue,Trackmag,Knots,Speed,Speedunits,Modechar);
+  sprintf(m, "G%cVTG,%s,T,%s,M,%s,N,%s,%c,%c",currheading.xchar,currheading.Tracktrue,currheading.Trackmag,currheading.Knots,currheading.Speed,currheading.Speedunits,currheading.Modechar);
 }
 
 int parseGPZDA(const char * m)
@@ -828,10 +819,10 @@ int parseGPZDA(const char * m)
   Serial.println(m);
   #endif
   int n=sscanf(m,"$GPZDA,%20[^,],%2d,%2d,%4d,00,00*%x",
-        Time,
-        &Day,
-        &Month,
-        &Year,
+        temppos.Time,
+        &temptime.Day,
+        &temptime.Month,
+        &temptime.Year,
         &chk
         );
     if (n!=5) {
@@ -840,16 +831,20 @@ int parseGPZDA(const char * m)
         Serial.println(n);
       #endif
     }
+    if (n>=4){
+      currtime=temptime;
+      strcpy(currpos.Time,temppos.Time);
+    }
     #ifdef DEBUG
     Serial.println("result ZDA parsing :" );
     Serial.print("Time : ");
-    Serial.println(Time);
+    Serial.println(temppos.Time);
     Serial.print("Day : ");
-    Serial.println(Day);
+    Serial.println(temptime.Day);
     Serial.print("Month : ");
-    Serial.println(Month);
+    Serial.println(temptime.Month);
     Serial.print("Year : ");
-    Serial.println(Year);
+    Serial.println(temptime.Year);
     Serial.print("chk : ");
     Serial.println(chk);
     #endif
@@ -863,7 +858,7 @@ int parseGPZDA(const char * m)
 void GPZDA(char * m){
   //prepare GPZDA string
   //$GPZDA,204007.00,13,05,2022,,*62
-  sprintf(m, "GPZDA,%s,%2.2d,%2.2d,%4d,,", Time, Day,Month,Year);
+  sprintf(m, "GPZDA,%s,%2.2d,%2.2d,%4d,,", currpos.Time, currtime.Day,currtime.Month,currtime.Year);
 }
 
 

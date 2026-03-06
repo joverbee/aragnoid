@@ -27,8 +27,8 @@ output on UART1 115200 8N1 LSB FIRST
 nmea message in main talker ID 1-GP mode (P prefix)
 GGA on
 VTG on
-ZDA on with factor 10 to send only every 1s
-PUBX04 on
+ZDA on with factor 10 to send only every 1s (read in arag documentation, I think this needs to be only 0.1Hz so factor 100)
+PUBX04 on (needed?)
 NAV5 dynamic model 'pedestrian' (important otherwise you get filtering of the position in time)
 
 update speed 100ms
