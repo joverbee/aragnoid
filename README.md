@@ -29,8 +29,7 @@ GGA on
 VTG on
 ZDA on with factor 10 to send only every 1s (read in arag documentation, I think this needs to be only 0.1Hz so factor 100)
 PUBX04 on (needed?)
-NAV5 dynamic model 'pedestrian' (important otherwise you get filtering of the position in time)
-
+NAV5 dynamic model 'pedestrian' (important: this filters for slow moving objects, precision will be higher)
 update speed 100ms
 
 # correction of heading when driving in reverse
@@ -42,6 +41,17 @@ This is important for the arag as otherwise it will assume we made a full circle
 
 There is a fault scenario however as the GPS still doesnt know what is forward and backward and could be thinking the whole time that we are driving backward depending on the initial conditions when starting up.
 To solve this you can tie a pushbutton between pin 3 and gnd and press it once when driving forward to reset the direction.
+Hopefully this is only rarely needed?
+Taking actual heading from an IMU like BNO085 would avoid this problem
+
+# sensor fusion
+todo for better accuracy: needed in practice?
+
+# known problems
+orange lines from dropped messages?
+reversing fails
+crossing 10 kmh seems to drop communication?
+
 
 
 
