@@ -33,6 +33,15 @@ NAV5 dynamic model 'pedestrian' (important otherwise you get filtering of the po
 
 update speed 100ms
 
+# correction of heading when driving in reverse
+A single gps receiver doesn't know what is front or back and calculates heading as a vector from previous position to current position (possibily filtered)
+A tractor however can not rotate around its axis without some radius of curvature
+If we detect a sudden change in direction that is closer to 180 degrees than 0 we know we are in reverse and the heading as far as the tractor is concerned 
+is still forward. We correct the heading by adding 180 to the gps heading and correcting for cases where it would fall outside the [0-360[ range
+This is important for the arag as otherwise it will assume we made a full circle and we sprayed a semicircular area while we didn't.
+
+There is a fault scenario however as the GPS still doesnt know what is forward and backward and could be thinking the whole time that we are driving backward depending on the initial conditions when starting up.
+To solve this you can tie a pushbutton between pin 3 and gnd and press it once when driving forward to reset the direction.
 
 
 

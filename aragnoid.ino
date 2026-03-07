@@ -28,11 +28,12 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print some debug messages                             JUY
+//#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
 //#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
+#define REVERSECORRECT //correct heading when in reverse
 
 
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
@@ -112,6 +113,7 @@ char buffer[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages from RT
 char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages to arag
 const int trig = 5;
 const int trig2 = 4;
+const int reversereset=3;
 
 /* Set the delay between fresh samples */
 #define BNO055_SAMPLERATE_DELAY_MS (100)
@@ -137,7 +139,7 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(trig, OUTPUT);
   pinMode(trig2, OUTPUT); //trigger while receiving RTK commands
-
+  pinMode(reversereset, INPUT_PULLUP); //connect a button to this pin and gnd to force direction to forward
   
   rtc.setHours(12);
   rtc.setMinutes(0);
@@ -716,6 +718,56 @@ void GPGGA(char * m)
   
 }
 
+void correctreverse(){
+  //correct the tempheading by comparing it to the currentheading
+  //if delta is closer to 180 than we are in reverse
+  //we correct this by adding 180 to the tempheading
+  //and setting temheading.fwd=true
+  //every next heading will also get this correction as long as we are reversing
+  //when driving forward again, the delta will be less than 180 (wrt to the corrected direction we had in the previous step)
+  //and no correction is needed and tempheading.fwd=false
+  //in the case the resetreverse button is pressed, we dont apply the correction so that next 
+  char * end_ptr;
+  double oldheading=strtof(currheading.Tracktrue,&end_ptr);
+  double newheading=strtof(tempheading.Tracktrue,&end_ptr);
+  double delta=oldheading-newheading;
+  if (delta<0.0){delta+=360.0;}
+  if (delta>=360.0){delta-=360.0;}
+  //now check if delta closer to 180, this would mean we went into reverse
+  if ((delta>90.0) and (delta<270.0)){
+    Serial.println("Correcting direction");
+    tempheading.fwd=false;
+  }
+  else{
+    tempheading.fwd=true;
+  }
+  if (digitalRead(reversereset)==0){
+    Serial.println("Reset to forward driving");
+    tempheading.fwd=true; //force true
+  }
+  if (tempheading.fwd){
+    Serial.println("Forward");
+  }
+  else{
+    Serial.println("Reverse");
+    newheading+=180.0;
+    if (newheading>=360.0){newheading-=360.0;}
+    sprintf(tempheading.Tracktrue,"%s",String(newheading, 3).c_str());
+  }
+  #ifdef DEBUG
+    Serial.print("oldheading:");
+    Serial.println(oldheading);
+    Serial.print("newheading:");
+    Serial.println(newheading);
+    Serial.print("delta:");
+    Serial.println(delta);
+    Serial.print("tempheading.Tracktrue:");
+    Serial.println(tempheading.Tracktrue);
+
+  #endif
+
+}
+
 int parseGNVTG(const char * m)
 {
   //Serial.println(m);
@@ -739,45 +791,11 @@ int parseGNVTG(const char * m)
     }
     if (n>=7){
       //update only if correclty received
-
       //check for reversed
-       char * end_ptr;
-      double oldheading=strtof(currheading.Tracktrue,&end_ptr);
-      double newheading=strtof(tempheading.Tracktrue,&end_ptr);
-      double delta=oldheading-newheading;
-      if (delta<0.0){delta+=360.0;}
-      if (delta>=360.0){delta-=360.0;}
-      //now check if delta closer to 180, this would mean we went into reverse
-      if ((delta>90.0) and (delta<270.0)){
-        Serial.println("Correcting direction");
-        tempheading.fwd=false;
-      }
-      else{
-        tempheading.fwd=true;
-      }
-      if (tempheading.fwd){
-        Serial.println("Forward");
-      }
-      else{
-        Serial.println("Reverse");
-        newheading+=180.0;
-        if (newheading>=360.0){newheading-=360.0;}
-        sprintf(tempheading.Tracktrue,"%s",String(newheading, 3).c_str());
-      }
-
-      #ifdef DEBUG
-        Serial.print("oldheading:");
-        Serial.println(oldheading);
-        Serial.print("newheading:");
-        Serial.println(newheading);
-        Serial.print("delta:");
-        Serial.println(delta);
-        Serial.print("tempheading.Tracktrue:");
-        Serial.println(tempheading.Tracktrue);
-
+      #ifdef REVERSECORRECT 
+        correctreverse();
       #endif
-    currheading=tempheading;
-
+      currheading=tempheading;
     }
 
     //strcpy(Trackmag,Tracktrue);
@@ -973,7 +991,7 @@ void debugtest()
 
 
   //testing reversing
-  
+  while (true){
   //driving forward
   Serial.println("driving Forward");
   char* test= "$GNVTG,335.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
@@ -1001,6 +1019,8 @@ void debugtest()
   test= "$GNVTG,25.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
   n=parseGNVTG(test);
 
+  delay(100);
+  }
 
 
 
