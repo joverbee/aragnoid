@@ -3,7 +3,7 @@
 #include <Arduino_CRC32.h>
 
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BNO055.h>
+#include <Adafruit_BNO08x.h>
 
 
 #include <SPI.h>
@@ -88,12 +88,15 @@ Coordinate currpos,temppos;
 Heading currheading,tempheading;
 Timestruct currtime,temptime;
 
-//GYRO
-double AccX=0.0; //acceleration in X direction m/s^2
-double AccY=0.0; //acceleration in Y direction m/s^2
-double TiltX=0.0; //tilt in X direction in degrees
-double TiltY=0.0; //tilt in Y direction in degrees
-bool gyro=false;
+struct Gyrodata{
+  //GYRO
+  double AccX=0.0; //acceleration in X direction m/s^2
+  double AccY=0.0; //acceleration in Y direction m/s^2
+  double TiltX=0.0; //tilt in X direction in degrees
+  double TiltY=0.0; //tilt in Y direction in degrees
+  bool gyro=false;
+};
+Gyrodata currgyro,tempgyro;
 
 //general
 bool toggle=true;
@@ -115,11 +118,11 @@ const int trig = 5;
 const int trig2 = 4;
 const int reversereset=3;
 
+#define BNO08X_RESET -1
+Adafruit_BNO08x  bno08x(BNO08X_RESET);
+sh2_SensorValue_t sensorValue;
 /* Set the delay between fresh samples */
-#define BNO055_SAMPLERATE_DELAY_MS (100)
-// Check I2C device address and correct line below (by default address is 0x29 or 0x28)
-//                                   id, address
-Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
+
 
 
 void setup() {
@@ -146,29 +149,54 @@ void setup() {
   rtc.setSeconds(0);
   updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
 
+
+
   #ifdef DEBUG
     while (!Serial);
-    debugtest();
   #endif
+  
 
   //start the gyro if needed
   #ifdef GYRO
-  if(bno.begin())
-  {
-    Serial.println("BNO055 detected");
-    delay(1000);
-    bno.setExtCrystalUse(true);
-    gyro=true;
-  }else
-  {
-    Serial.println("No gyro found, continuiing without");
-    gyro=false;
-  }
+    // Try to initialize!
+    if (!bno08x.begin_I2C()) {
+        Serial.println("Failed to find BNO08x chip, going on without");
+        #undef GYRO
+    }
+    else{
+      Serial.println("BNO08x Found!");
+
+      for (int n = 0; n < bno08x.prodIds.numEntries; n++) {
+        Serial.print("Part ");
+        Serial.print(bno08x.prodIds.entry[n].swPartNumber);
+        Serial.print(": Version :");
+        Serial.print(bno08x.prodIds.entry[n].swVersionMajor);
+        Serial.print(".");
+        Serial.print(bno08x.prodIds.entry[n].swVersionMinor);
+        Serial.print(".");
+        Serial.print(bno08x.prodIds.entry[n].swVersionPatch);
+        Serial.print(" Build ");
+        Serial.println(bno08x.prodIds.entry[n].swBuildNumber);
+      }
+      setReports();
+    }
   #endif
 
+  #ifdef DEBUG
+    debugtest();
+  #endif
 
   Serial.println("Aragnoid started"); 
 }
+
+// Here is where you define the sensor outputs you want to receive
+void setReports(void) {
+  Serial.println("Setting desired reports");
+  if (! bno08x.enableReport(SH2_GAME_ROTATION_VECTOR)) {
+    Serial.println("Could not enable game vector");
+  }
+}
+
 
 void loop() {
 
@@ -351,6 +379,9 @@ void loop() {
         }
     }    
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
+  #ifdef GYRO
+    readgyro();
+  #endif
 }
 
 void sendbinary(){
@@ -392,51 +423,51 @@ void sendbinary(){
   Serial.println();
   #endif 
 
-#ifdef GYRO
-  //convert double to bytes
-  byte* AccXpointer = (byte*)&AccX;
-  byte* AccYpointer = (byte*)&AccY;
-  byte* TiltXpointer = (byte*)&TiltX;
-  byte* TiltYpointer = (byte*)&TiltY;
-  //AccX 8 byte double, float and double  are little endian on arduino
-  size_t id=HEADER+4;
-  binmsg[id++]=AccXpointer[0];
-  binmsg[id++]=AccXpointer[1];
-  binmsg[id++]=AccXpointer[2];
-  binmsg[id++]=AccXpointer[3];
-  binmsg[id++]=AccXpointer[4];
-  binmsg[id++]=AccXpointer[5];
-  binmsg[id++]=AccXpointer[6];
-  binmsg[id++]=AccXpointer[7];
-  //and AccY
-  binmsg[id++]=AccYpointer[0];
-  binmsg[id++]=AccYpointer[1];
-  binmsg[id++]=AccYpointer[2];
-  binmsg[id++]=AccYpointer[3];
-  binmsg[id++]=AccYpointer[4];
-  binmsg[id++]=AccYpointer[5];
-  binmsg[id++]=AccYpointer[6];
-  binmsg[id++]=AccYpointer[7];
-  //and Tiltx
-  id=HEADER+28;
-  binmsg[id++]=TiltXpointer[0];
-  binmsg[id++]=TiltXpointer[1];
-  binmsg[id++]=TiltXpointer[2];
-  binmsg[id++]=TiltXpointer[3];
-  binmsg[id++]=TiltXpointer[4];
-  binmsg[id++]=TiltXpointer[5];
-  binmsg[id++]=TiltXpointer[6];
-  binmsg[id++]=TiltXpointer[7];
-  //Tilty
-  binmsg[id++]=TiltYpointer[0];
-  binmsg[id++]=TiltYpointer[1];
-  binmsg[id++]=TiltYpointer[2];
-  binmsg[id++]=TiltYpointer[3];
-  binmsg[id++]=TiltYpointer[4];
-  binmsg[id++]=TiltYpointer[5];
-  binmsg[id++]=TiltYpointer[6];
-  binmsg[id++]=TiltYpointer[7];
-#endif
+// #ifdef GYRO
+//   //convert double to bytes
+//   byte* AccXpointer = (byte*)&AccX;
+//   byte* AccYpointer = (byte*)&AccY;
+//   byte* TiltXpointer = (byte*)&TiltX;
+//   byte* TiltYpointer = (byte*)&TiltY;
+//   //AccX 8 byte double, float and double  are little endian on arduino
+//   size_t id=HEADER+4;
+//   binmsg[id++]=AccXpointer[0];
+//   binmsg[id++]=AccXpointer[1];
+//   binmsg[id++]=AccXpointer[2];
+//   binmsg[id++]=AccXpointer[3];
+//   binmsg[id++]=AccXpointer[4];
+//   binmsg[id++]=AccXpointer[5];
+//   binmsg[id++]=AccXpointer[6];
+//   binmsg[id++]=AccXpointer[7];
+//   //and AccY
+//   binmsg[id++]=AccYpointer[0];
+//   binmsg[id++]=AccYpointer[1];
+//   binmsg[id++]=AccYpointer[2];
+//   binmsg[id++]=AccYpointer[3];
+//   binmsg[id++]=AccYpointer[4];
+//   binmsg[id++]=AccYpointer[5];
+//   binmsg[id++]=AccYpointer[6];
+//   binmsg[id++]=AccYpointer[7];
+//   //and Tiltx
+//   id=HEADER+28;
+//   binmsg[id++]=TiltXpointer[0];
+//   binmsg[id++]=TiltXpointer[1];
+//   binmsg[id++]=TiltXpointer[2];
+//   binmsg[id++]=TiltXpointer[3];
+//   binmsg[id++]=TiltXpointer[4];
+//   binmsg[id++]=TiltXpointer[5];
+//   binmsg[id++]=TiltXpointer[6];
+//   binmsg[id++]=TiltXpointer[7];
+//   //Tilty
+//   binmsg[id++]=TiltYpointer[0];
+//   binmsg[id++]=TiltYpointer[1];
+//   binmsg[id++]=TiltYpointer[2];
+//   binmsg[id++]=TiltYpointer[3];
+//   binmsg[id++]=TiltYpointer[4];
+//   binmsg[id++]=TiltYpointer[5];
+//   binmsg[id++]=TiltYpointer[6];
+//   binmsg[id++]=TiltYpointer[7];
+// #endif
 
 
   //and recalc the CRC32 
@@ -735,7 +766,7 @@ void correctreverse(){
   if (delta>=360.0){delta-=360.0;}
   //now check if delta closer to 180, this would mean we went into reverse
   if ((delta>90.0) and (delta<270.0)){
-    Serial.println("Correcting direction");
+    //Serial.println("Correcting direction");
     tempheading.fwd=false;
   }
   else{
@@ -746,22 +777,22 @@ void correctreverse(){
     tempheading.fwd=true; //force true
   }
   if (tempheading.fwd){
-    Serial.println("Forward");
+    //Serial.println("Forward");
   }
   else{
-    Serial.println("Reverse");
+    Serial.print("Reverse::");
     newheading+=180.0;
     if (newheading>=360.0){newheading-=360.0;}
     sprintf(tempheading.Tracktrue,"%s",String(newheading, 3).c_str());
   }
   #ifdef DEBUG
     Serial.print("oldheading:");
-    Serial.println(oldheading);
-    Serial.print("newheading:");
-    Serial.println(newheading);
-    Serial.print("delta:");
-    Serial.println(delta);
-    Serial.print("tempheading.Tracktrue:");
+    Serial.print(oldheading);
+    Serial.print(" newheading:");
+    Serial.print(newheading);
+    Serial.print(" delta:");
+    Serial.print(delta);
+    Serial.print(" tempheading.Tracktrue:");
     Serial.println(tempheading.Tracktrue);
 
   #endif
@@ -1019,7 +1050,7 @@ void debugtest()
   test= "$GNVTG,25.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
   n=parseGNVTG(test);
 
-  delay(100);
+  delay(1000);
   }
 
 
@@ -1073,40 +1104,29 @@ unsigned long CalculateBlockCRC32( unsigned long ulCount, unsigned char *ucBuffe
 } 
 
 void readgyro(){
+  if (bno08x.wasReset()) {
+      Serial.print("sensor was reset ");
+      setReports();
+    }
+    
+    if (! bno08x.getSensorEvent(&sensorValue)) {
+      return;
+    }
+    
+    switch (sensorValue.sensorId) {
+      
+      case SH2_GAME_ROTATION_VECTOR:
+        Serial.print("Game Rotation Vector - r: ");
+        Serial.print(sensorValue.un.gameRotationVector.real);
+        Serial.print(" i: ");
+        Serial.print(sensorValue.un.gameRotationVector.i);
+        Serial.print(" j: ");
+        Serial.print(sensorValue.un.gameRotationVector.j);
+        Serial.print(" k: ");
+        Serial.println(sensorValue.un.gameRotationVector.k);
+        break;
+    }
+    
+
   
-
-  //read Euler tilt angles
-  
-  //read BNO055 gyroscope
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-
-  /* Display the floating point data */
-  #ifdef DEBUG
-  Serial.print("tiltX: ");
-  Serial.print(euler.x());
-  Serial.print(" tiltY: ");
-  Serial.print(euler.y());
-  Serial.print(" tiltZ: ");
-  Serial.print(euler.z());
-  Serial.print("\t\t");
-  #endif
-
-  //read acceleration vector
-  
-  #ifdef DEBUG
-  Serial.print("aX: ");
-  Serial.print(accel.x());
-  Serial.print(" aY: ");
-  Serial.print(accel.y());
-  Serial.print(" aZ: ");
-  Serial.print(accel.z());
-  Serial.print("\t\t");
-  #endif
-
-  //fill in global coordinates
-  AccX=accel.x();
-  AccY=accel.y();
-  TiltX=euler.x();
-  TiltY=euler.y();
 }
