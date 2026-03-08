@@ -28,7 +28,7 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-//#define DEBUG //print some debug messages                             JUY
+#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
 //#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
@@ -828,10 +828,11 @@ int parseGNVTG(const char * m)
       #ifdef REVERSECORRECT 
         correctreverse();
       #endif
+      strcpy(tempheading.Trackmag,tempheading.Tracktrue);
       currheading=tempheading;
     }
 
-    //strcpy(Trackmag,Tracktrue);
+    
 
     #ifdef DEBUGDETAIL
     Serial.println("result GNVTG parsing :" );
