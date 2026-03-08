@@ -28,12 +28,12 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print some debug messages                             JUY
+//#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
-#define NMEAUSB //copy nmea messages also on usb uart 
+//#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
-#define REVERSECORRECT //correct heading when in reverse
+//#define REVERSECORRECT //correct heading when in reverse
 
 
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
@@ -218,8 +218,7 @@ void loop() {
               //send it to arag as soon as received
               GPGGA(msg);
               sendnmea(msg); //non blocking, can send this long message while we are already receiving the next
-              digitalWrite(LED_BUILTIN, toggle); 
-              toggle=!toggle;
+              
           }else if(buffer[3] == 'V'){
               parseGNVTG(buffer);
               //send it to arag as soon as received
@@ -231,7 +230,8 @@ void loop() {
               GPZDA(msg);
               sendnmea(msg); //1 Hz
               sendbinary(); //note at the moment contains wrong time, maybe this binary isnt even nessecary as it is an empty tiltdata message with empty contents
-              
+              digitalWrite(LED_BUILTIN, toggle); 
+              toggle=!toggle;
 
           }else if(buffer[3] == 'B'){
               parsePUBX(buffer);
