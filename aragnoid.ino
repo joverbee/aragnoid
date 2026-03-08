@@ -28,12 +28,12 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print some debug messages                             JUY
+//#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
-//#define NMEAUSB //copy nmea messages also on usb uart 
+#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 //#define GYRO //use gyro attached to arduino for tilt
-//#define REVERSECORRECT //correct heading when in reverse
+#define REVERSECORRECT //correct heading when in reverse
 
 
 #define CRC32_POLYNOMIAL 0xEDB88320L //needed for novatel crc32 implementation
@@ -154,7 +154,7 @@ void setup() {
   #ifdef DEBUG
     while (!Serial);
   #endif
-  
+ 
 
   //start the gyro if needed
   #ifdef GYRO
@@ -185,6 +185,10 @@ void setup() {
   #ifdef DEBUG
     debugtest();
   #endif
+  debugtest(); //this is essential to make it work, why? what does debugtest do
+  //fill in initial coordinates?
+  //delay? tried delay(100) didnt change
+
 
   Serial.println("Aragnoid started"); 
 }
