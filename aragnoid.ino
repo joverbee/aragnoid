@@ -32,7 +32,8 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 //#define DEBUGDETAIL //print parsing details
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
-//#define GYRO //use gyro attached to arduino for tilt
+#define GYRO //use gyro attached to arduino for tilt
+//#define GYROTEST
 #define REVERSECORRECT //correct heading when in reverse
 
 
@@ -158,6 +159,7 @@ void setup() {
 
   //start the gyro if needed
   #ifdef GYRO
+    Serial.println("Trying to talk to gyro");
     // Try to initialize!
     if (!bno08x.begin_I2C()) {
         Serial.println("Failed to find BNO08x chip, going on without");
@@ -1057,7 +1059,12 @@ void debugtest()
   test= "$GNVTG,25.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
   n=parseGNVTG(test);
 
-
+  #ifdef GYROTEST
+    while (true){
+      readgyro();
+      delay(1);
+    }
+  #endif
 
   Serial.println("end of test code");
 
