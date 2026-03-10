@@ -30,10 +30,10 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 //comment any of these if you don't want this function
 #define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
-#define NMEAUSB //copy nmea messages also on usb uart 
+//#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 #define GYRO //use gyro attached to arduino for tilt
-#define GYROTEST //this keeps reading out the gyro (and blocks the rest of the program)
+//#define GYROTEST //this keeps reading out the gyro (and blocks the rest of the program)
 #define REVERSECORRECT //correct heading when in reverse
 
 
@@ -169,7 +169,7 @@ void setup() {
         #undef GYRO
     }
     else{
-      Wire.setClock(200000L);   // I2C speed, 400 kHz is a little fast for Arduino's pullups
+      //Wire.setClock(200000L);   // I2C speed, 400 kHz is a little fast for Arduino's pullups
       Serial.println("BNO08x Found!");
 
       for (int n = 0; n < bno08x.prodIds.numEntries; n++) {
@@ -205,9 +205,9 @@ void setReports(void) {
   if (!bno08x.enableReport(SH2_ROTATION_VECTOR)) {
     Serial.println("Could not enable rotation vector");
   }
-  if (!bno08x.enableReport(SH2_RAW_MAGNETOMETER)) {
-    Serial.println("Could not enable raw magnetometer");
-  }
+  //if (!bno08x.enableReport(SH2_RAW_MAGNETOMETER)) {
+  //  Serial.println("Could not enable raw magnetometer");
+  //}
   
 }
 
@@ -775,7 +775,12 @@ void correctreverse(){
   //and no correction is needed and tempheading.fwd=false
   //in the case the resetreverse button is pressed, we dont apply the correction so that next 
   char * end_ptr;
+
   double oldheading=strtof(currheading.Tracktrue,&end_ptr);
+  #ifdef GYRO
+    oldheading=currgyro.yaw; //compare newheading to magnetic heading from gyro
+    tempheading.Trackmag=currgyro.yaw;
+  #endif
   double newheading=strtof(tempheading.Tracktrue,&end_ptr);
   double delta=oldheading-newheading;
   if (delta<0.0){delta+=360.0;}
@@ -817,6 +822,7 @@ void correctreverse(){
 
 int parseGNVTG(const char * m)
 {
+  //todo change so that it can parse missing True and or Mag heading or even speed in knots
   //Serial.println(m);
   int chk=0;
   int n=sscanf(m,"$G%cVTG,%20[^,],T,,M,%20[^,],N,%20[^,],%c,%c*%x",
@@ -842,7 +848,14 @@ int parseGNVTG(const char * m)
       #ifdef REVERSECORRECT 
         correctreverse();
       #endif
-      strcpy(tempheading.Trackmag,tempheading.Tracktrue);
+
+      #ifdef GYRO
+        sprintf(tempheading.Trackmag,"%s",String(currgyro.yaw, 3).c_str()); //fill in magnetic heading
+      #else
+        strcpy(tempheading.Trackmag,tempheading.Tracktrue);
+      #endif
+
+      
       currheading=tempheading;
     }
 
