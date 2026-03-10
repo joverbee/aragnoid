@@ -33,7 +33,7 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 #define GYRO //use gyro attached to arduino for tilt
-//#define GYROTEST //this keeps reading out the gyro (and blocks the rest of the program)
+#define GYROTEST //this keeps reading out the gyro (and blocks the rest of the program)
 #define REVERSECORRECT //correct heading when in reverse
 
 
@@ -169,6 +169,7 @@ void setup() {
         #undef GYRO
     }
     else{
+      Wire.setClock(200000L);   // I2C speed, 400 kHz is a little fast for Arduino's pullups
       Serial.println("BNO08x Found!");
 
       for (int n = 0; n < bno08x.prodIds.numEntries; n++) {
@@ -201,9 +202,13 @@ void setup() {
 // Here is where you define the sensor outputs you want to receive
 void setReports(void) {
   Serial.println("Setting desired reports");
-  if (!bno08x.enableReport(SH2_GEOMAGNETIC_ROTATION_VECTOR)) {
-    Serial.println("Could not enable geomagnetic rotation vector");
+  if (!bno08x.enableReport(SH2_ROTATION_VECTOR)) {
+    Serial.println("Could not enable rotation vector");
   }
+  if (!bno08x.enableReport(SH2_RAW_MAGNETOMETER)) {
+    Serial.println("Could not enable raw magnetometer");
+  }
+  
 }
 
 
@@ -1132,7 +1137,10 @@ void quaternionToEuler(float qr, float qi, float qj, float qk, Gyrodata* ypr, bo
       ypr->yaw *= RAD_TO_DEG; //around z axis, right hand rule 
       ypr->pitch *= RAD_TO_DEG; //around y axis, right hand rule
       ypr->roll *= RAD_TO_DEG; //around x axis, right hand rule
-      ypr->yaw += 180.0; //to get an angle between 0 and 360
+      if (ypr->yaw<0){ //if Y axis is north we get 0 or 360 (for -0), S is 180
+        ypr->yaw += 360.0; //to get an angle between 0 and 360
+      }
+      
     }
 }
 
@@ -1147,20 +1155,28 @@ void readgyro(){
     }
     
     switch (sensorValue.sensorId) {
-      case SH2_GEOMAGNETIC_ROTATION_VECTOR:
-        float qr=sensorValue.un.geoMagRotationVector.real;
-        float qi=sensorValue.un.geoMagRotationVector.i;
-        float qj=sensorValue.un.geoMagRotationVector.j;
-        float qk=sensorValue.un.geoMagRotationVector.k;
+      case SH2_RAW_MAGNETOMETER:
+        Serial.print("Raw Magnetic Field - x: ");
+        Serial.print(sensorValue.un.rawMagnetometer.x);
+        Serial.print(" y: ");
+        Serial.print(sensorValue.un.rawMagnetometer.y);
+        Serial.print(" z: ");
+        Serial.println(sensorValue.un.rawMagnetometer.z);
+        break;
+      case SH2_ROTATION_VECTOR:
+        float qr=sensorValue.un.rotationVector.real;
+        float qi=sensorValue.un.rotationVector.i;
+        float qj=sensorValue.un.rotationVector.j;
+        float qk=sensorValue.un.rotationVector.k;
         #ifdef DEBUGDETAIL
-          Serial.print("Geo-Magnetic Rotation Vector - r: ");
+          Serial.print("Rotation Vector - r: ");
           Serial.print(qr);
           Serial.print(" i: ");
-          Serial.print(sensorValue.un.geoMagRotationVector.i);
+          Serial.print(sensorValue.un.rotationVector.i);
           Serial.print(" j: ");
-          Serial.print(sensorValue.un.geoMagRotationVector.j);
+          Serial.print(sensorValue.un.rotationVector.j);
           Serial.print(" k: ");
-          Serial.println(sensorValue.un.geoMagRotationVector.k);
+          Serial.println(sensorValue.un.rotationVector.k);
         #endif
         quaternionToEuler(qr, qi,  qj, qk, &currgyro, true);
         #ifdef DEBUG
@@ -1171,7 +1187,8 @@ void readgyro(){
           Serial.print(" roll: ");
           Serial.println(currgyro.roll);
         #endif
-      break;
+        break;
+      
     }
     
 
