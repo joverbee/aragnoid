@@ -28,12 +28,12 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-//#define DEBUG //print some debug messages                             JUY
+#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
 #define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
 #define GYRO //use gyro attached to arduino for tilt
-//#define GYROTEST
+//#define GYROTEST //this keeps reading out the gyro (and blocks the rest of the program)
 #define REVERSECORRECT //correct heading when in reverse
 
 
@@ -91,11 +91,14 @@ Timestruct currtime,temptime;
 
 struct Gyrodata{
   //GYRO
-  double AccX=0.0; //acceleration in X direction m/s^2
-  double AccY=0.0; //acceleration in Y direction m/s^2
-  double TiltX=0.0; //tilt in X direction in degrees
-  double TiltY=0.0; //tilt in Y direction in degrees
-  bool gyro=false;
+  //double AccX=0.0; //acceleration in X direction m/s^2
+  //double AccY=0.0; //acceleration in Y direction m/s^2
+  //double TiltX=0.0; //tilt in X direction in degrees
+  //double TiltY=0.0; //tilt in Y direction in degrees
+  //bool gyro=false;
+  double yaw=0.0;
+  double pitch=0.0;
+  double roll=0.0;
 };
 Gyrodata currgyro,tempgyro;
 
@@ -198,8 +201,8 @@ void setup() {
 // Here is where you define the sensor outputs you want to receive
 void setReports(void) {
   Serial.println("Setting desired reports");
-  if (! bno08x.enableReport(SH2_GAME_ROTATION_VECTOR)) {
-    Serial.println("Could not enable game vector");
+  if (!bno08x.enableReport(SH2_GEOMAGNETIC_ROTATION_VECTOR)) {
+    Serial.println("Could not enable geomagnetic rotation vector");
   }
 }
 
@@ -1114,6 +1117,25 @@ unsigned long CalculateBlockCRC32( unsigned long ulCount, unsigned char *ucBuffe
      return( ulCRC );
 } 
 
+void quaternionToEuler(float qr, float qi, float qj, float qk, Gyrodata* ypr, bool degrees = false) {
+
+    float sqr = sq(qr);
+    float sqi = sq(qi);
+    float sqj = sq(qj);
+    float sqk = sq(qk);
+
+    ypr->yaw = atan2(2.0 * (qi * qj + qk * qr), (sqi - sqj - sqk + sqr));
+    ypr->pitch = asin(-2.0 * (qi * qk - qj * qr) / (sqi + sqj + sqk + sqr));
+    ypr->roll = atan2(2.0 * (qj * qk + qi * qr), (-sqi - sqj + sqk + sqr));
+
+    if (degrees) {
+      ypr->yaw *= RAD_TO_DEG; //around z axis, right hand rule 
+      ypr->pitch *= RAD_TO_DEG; //around y axis, right hand rule
+      ypr->roll *= RAD_TO_DEG; //around x axis, right hand rule
+      ypr->yaw += 180.0; //to get an angle between 0 and 360
+    }
+}
+
 void readgyro(){
   if (bno08x.wasReset()) {
       Serial.print("sensor was reset ");
@@ -1125,17 +1147,31 @@ void readgyro(){
     }
     
     switch (sensorValue.sensorId) {
-      
-      case SH2_GAME_ROTATION_VECTOR:
-        Serial.print("Game Rotation Vector - r: ");
-        Serial.print(sensorValue.un.gameRotationVector.real);
-        Serial.print(" i: ");
-        Serial.print(sensorValue.un.gameRotationVector.i);
-        Serial.print(" j: ");
-        Serial.print(sensorValue.un.gameRotationVector.j);
-        Serial.print(" k: ");
-        Serial.println(sensorValue.un.gameRotationVector.k);
-        break;
+      case SH2_GEOMAGNETIC_ROTATION_VECTOR:
+        float qr=sensorValue.un.geoMagRotationVector.real;
+        float qi=sensorValue.un.geoMagRotationVector.i;
+        float qj=sensorValue.un.geoMagRotationVector.j;
+        float qk=sensorValue.un.geoMagRotationVector.k;
+        #ifdef DEBUGDETAIL
+          Serial.print("Geo-Magnetic Rotation Vector - r: ");
+          Serial.print(qr);
+          Serial.print(" i: ");
+          Serial.print(sensorValue.un.geoMagRotationVector.i);
+          Serial.print(" j: ");
+          Serial.print(sensorValue.un.geoMagRotationVector.j);
+          Serial.print(" k: ");
+          Serial.println(sensorValue.un.geoMagRotationVector.k);
+        #endif
+        quaternionToEuler(qr, qi,  qj, qk, &currgyro, true);
+        #ifdef DEBUG
+          Serial.print(" yaw: ");
+          Serial.print(currgyro.yaw);
+          Serial.print(" pitch: ");
+          Serial.print(currgyro.pitch);
+          Serial.print(" roll: ");
+          Serial.println(currgyro.roll);
+        #endif
+      break;
     }
     
 
