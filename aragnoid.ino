@@ -820,9 +820,22 @@ void correctreverse(){
 
 }
 
+char* splitstring(char* input){
+  char *token, *string, *tofree,*msg;
+  //tofree = string = strdup("$GPVTG,335.788,T,,M,0.019,N,0.036,K,D*2B");
+  tofree = string = strdup(input);
+  while ((token = strsep(&string, ",")) != NULL)
+    sprintf(msg,"token=%s\n", token);
+    Serial.println(msg);
+  free(tofree);
+}
+
 int parseGNVTG(const char * m)
 {
   //todo change so that it can parse missing True and or Mag heading or even speed in knots
+  //change needed; make a function that reads till the next comma or newline
+  //then take these strings and convert them in what we want, the string could also be empty and then we decided what to do with that
+
   //Serial.println(m);
   int chk=0;
   int n=sscanf(m,"$G%cVTG,%20[^,],T,,M,%20[^,],N,%20[^,],%c,%c*%x",
@@ -1000,12 +1013,14 @@ void debugtest()
   n=parseGPGGA(atestGPGGA);
   Serial.println(n);
   
-  const char* atestGNVTG= "$GPVTG,335.788,T,,M,0.019,N,0.036,K,D*2B";
+  char* atestGNVTG= "$GPVTG,335.788,T,,M,0.019,N,0.036,K,D*2B";
   Serial.println(atestGNVTG);
   n=parseGNVTG(atestGNVTG);
   Serial.println(n);
   GNVTG(msg);
   Serial.println(msg);
+
+  splitstring(atestGNVTG);
 
   const char* atestGNVTG2= "$GNVTG,140.88,T,,M,8.04,N,14.89,K,D*05";
   Serial.println(atestGNVTG2);
