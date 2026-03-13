@@ -10,17 +10,22 @@ Connect Arag serial to RX and TX on pin 13/14, make use of a proper RS232 level 
 Connect RTKsimple module RX and TX on PIN 1/0, this is the connection to RTKsimple,make use of a RS232 interface board
 Connect Computer for debug messages to conventional usbserial port
 
+# Example data from novatel
+$GNVTG,15.228,T,15.228,M,0.000,N,0.000,K,A*3D
+$GNVTG,15.226,T,15.226,M,0.010,N,0.019,K,A*34
+$GNVTG,15.226,T,15.226,M,0.010,N,0.019,K,A*34
+$GNVTG,323.767,T,323.767,M,0.005,N,0.008,K,A*30
+
+
 # Example data
-GPGGA parsed
-$GPGGA,183538.70,5056.7186660,N,00446.6231208,E,4,12,0.64,17.998,M,46.220,M,0.7,4035*48
+$GPGGA,183538.70,5043.7286660,N,00436.5241308,E,4,12,0.64,17.998,M,46.220,M,0.7,4035*48
 $GNVTG,335.788,T,335.788,M,0.001,N,0.002,K,A*3E
-GPGGA parsed
-$GPGGA,183538.80,5056.7186657,N,00446.6231210,E,4,12,0.64,18.002,M,46.220,M,0.8,4035*40
+$GPGGA,183538.80,5043.7286657,N,00436.5241310,E,4,12,0.64,18.002,M,46.220,M,0.8,4035*40
 
 # Upgrade ideas
 add 2 RTK to allow for proper heading information, this is important when tractor is changing direction
-add gyro and compasss module to do the same
-add tilt for sloping fields?
+add gyro and compasss module to do the same (CHECK)
+add tilt for sloping fields? (CHECK)
 
 # config RTKsimple (very important!)
 output on UART1 115200 8N1 LSB FIRST
@@ -52,17 +57,12 @@ orange lines from dropped messages?
 reversing fails
 crossing 10 kmh seems to drop communication?
 
-#with ardusimple
-$GPGGA,145106.30,5058.5145502,N,00432.5279199,E,1,12,0.93,15.094,M,46.168,M,,*62
+# with ardusimple
 $GPVTG,,T,,M,,N,,K,D*26
-$GPGGA,145106.40,5058.5145538,N,00432.5279226,E,1,12,0.93,15.096,M,46.168,M,,*69
 $GPVTG,,T,,M,,N,,K,D*26
-$GPGGA,145106.50,5058.5145536,N,00432.5279255,E,1,12,0.93,15.100,M,46.168,M,,*6C
 $GPVTG,,T,,M,,N,,K,D*26
-$GPGGA,145106.60,5058.5145589,N,00432.5279296,E,1,12,0.93,15.101,M,46.168,M,,*65
-$GPZDA,145106.60,08,03,2026,,*6A
 
-#with NMEA simulator
+# with NMEA simulator
 $GNVTG,25.788,T,25.788,M,0.001,N,0.002,K,A*3E
 
 
