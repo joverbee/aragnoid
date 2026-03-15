@@ -1024,7 +1024,7 @@ void debugtest()
   GNVTG(msg);
   Serial.println(msg);
 
-  splitstring(atestGNVTG);
+
 
   const char* atestGNVTG2= "$GNVTG,140.88,T,,M,8.04,N,14.89,K,D*05";
   Serial.println(atestGNVTG2);
@@ -1071,7 +1071,7 @@ void debugtest()
 
 
   //testing reversing
-  
+  //while (true){
   //driving forward
   Serial.println("driving Forward");
   char* test= "$GNVTG,335.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
@@ -1098,7 +1098,7 @@ void debugtest()
   n=parseGNVTG(test);
   test= "$GNVTG,25.788,T,,M,0.001,N,0.002,K,A*3E";//without magnetic heading to not upset the parser
   n=parseGNVTG(test);
-
+  
   #ifdef GYROTEST
     while (true){
       readgyro();
