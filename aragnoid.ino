@@ -121,6 +121,7 @@ char bufferarag[MAXMESSAGESIZE]; //a buffer to hold incoming serial messages to 
 const int trig = 5;
 const int trig2 = 4;
 const int reversereset=3;
+const int reverseled=2;
 
 #define BNO08X_RESET -1
 Adafruit_BNO08x  bno08x(BNO08X_RESET);
@@ -147,7 +148,8 @@ void setup() {
   pinMode(trig, OUTPUT);
   pinMode(trig2, OUTPUT); //trigger while receiving RTK commands
   pinMode(reversereset, INPUT_PULLUP); //connect a button to this pin and gnd to force direction to forward
-  
+  pinMode(reverseled, OUTPUT); //a led to indicate that we are reversing
+
   rtc.setHours(12);
   rtc.setMinutes(0);
   rtc.setSeconds(0);
@@ -397,6 +399,10 @@ void loop() {
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
   #ifdef GYRO
     readgyro();
+  #endif
+
+  #ifdef REVERSECORRECT
+    digitalWrite(reverseled,!currheading.fwd);
   #endif
 }
 
@@ -773,13 +779,12 @@ void correctreverse(){
   //every next heading will also get this correction as long as we are reversing
   //when driving forward again, the delta will be less than 180 (wrt to the corrected direction we had in the previous step)
   //and no correction is needed and tempheading.fwd=false
-  //in the case the resetreverse button is pressed, we dont apply the correction so that next 
+  //in the case the resetreverse button is pressed, we dont apply the correction
   char * end_ptr;
 
   double oldheading=strtof(currheading.Tracktrue,&end_ptr);
   #ifdef GYRO
-    oldheading=currgyro.yaw; //compare newheading to magnetic heading from gyro
-    tempheading.Trackmag=currgyro.yaw;
+    oldheading=currgyro.yaw; //compare newheading to magnetic heading from gyro if available
   #endif
   double newheading=strtof(tempheading.Tracktrue,&end_ptr);
   double delta=oldheading-newheading;
@@ -794,14 +799,18 @@ void correctreverse(){
     tempheading.fwd=true;
   }
   if (digitalRead(reversereset)==0){
-    Serial.println("Reset to forward driving");
+    #ifdef DEBUG
+      Serial.println("Reset to forward driving");
+    #endif DEBUG
     tempheading.fwd=true; //force true
   }
   if (tempheading.fwd){
     //Serial.println("Forward");
   }
   else{
-    Serial.print("Reverse::");
+    #ifdef DEBUG
+      Serial.print("Reverse::");
+    #endif
     newheading+=180.0;
     if (newheading>=360.0){newheading-=360.0;}
     sprintf(tempheading.Tracktrue,"%s",String(newheading, 3).c_str());
@@ -815,7 +824,6 @@ void correctreverse(){
     Serial.print(delta);
     Serial.print(" tempheading.Tracktrue:");
     Serial.println(tempheading.Tracktrue);
-
   #endif
 
 }
@@ -835,6 +843,12 @@ int parseGNVTG(const char * m)
   //todo change so that it can parse missing True and or Mag heading or even speed in knots
   //change needed; make a function that reads till the next comma or newline
   //then take these strings and convert them in what we want, the string could also be empty and then we decided what to do with that
+  //****
+  //missing heading occurs when the is a cog freeze, this means the ardusimple can not make an accurate
+  //estimate of the heading and prefers to send nothing rather than wrong results
+  //this means that if we get a lower number of valid fields we should keep the last valid heading
+  //or when compass is available we can use that
+
 
   //Serial.println(m);
   int chk=0;
@@ -852,27 +866,17 @@ int parseGNVTG(const char * m)
       #ifdef DEBUG
         Serial.print("GxVTG parsing failed to retrieve all 8 variables, only got:");
         Serial.println(n); 
-        //strcpy(Tracktrue,"335.788");
       #endif
-    }
-    if (n>=7){
-      //update only if correclty received
-      //check for reversed
-      #ifdef REVERSECORRECT 
-        correctreverse();
-      #endif
-
+      tempheading=currheading;//keep the current heading but fill in the compass value if we have it
       #ifdef GYRO
-        sprintf(tempheading.Trackmag,"%s",String(currgyro.yaw, 3).c_str()); //fill in magnetic heading
-      #else
-        strcpy(tempheading.Trackmag,tempheading.Tracktrue);
+        sprintf(tempheading.Tracktrue,"%s",String(currgyro.yaw, 3).c_str()); //fill in true heading with compass value
       #endif
-
-      
-      currheading=tempheading;
     }
-
-    
+    #ifdef REVERSECORRECT 
+      correctreverse();
+    #endif
+    strcpy(tempheading.Trackmag,tempheading.Tracktrue); //we don't correct for magnetic declination, both are always the same
+    currheading=tempheading;
 
     #ifdef DEBUGDETAIL
     Serial.println("result GNVTG parsing :" );
