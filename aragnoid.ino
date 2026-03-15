@@ -28,7 +28,7 @@ Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0); // Create the ne
 #define MAXMESSAGESIZE 128
 
 //comment any of these if you don't want this function
-#define DEBUG //print some debug messages                             JUY
+//#define DEBUG //print some debug messages                             JUY
 //#define DEBUGDETAIL //print parsing details
 //#define NMEAUSB //copy nmea messages also on usb uart 
 #define NORTK //drop RTK specifics to resemble more the novatel original..changed that quality is maintained
@@ -168,7 +168,7 @@ void setup() {
     // Try to initialize!
     if (!bno08x.begin_I2C()) {
         Serial.println("Failed to find BNO08x chip, going on without");
-        #undef GYRO
+        //#undef GYRO
     }
     else{
       //Wire.setClock(200000L);   // I2C speed, 400 kHz is a little fast for Arduino's pullups
@@ -240,6 +240,10 @@ void loop() {
               //send it to arag as soon as received
               GNVTG(msg);
               sendnmea(msg); //non blocking
+              #ifdef GYRO
+                readgyro();
+              #endif
+
           }else if(buffer[3] == 'Z'){
               parseGPZDA(buffer);
               //send it to arag as soon as received, should only happen at 0.1Hz
@@ -397,10 +401,7 @@ void loop() {
         }
     }    
     //updatetime(); //only for debug in reality we should get this from rtksimple from the atomic clocks of the GPS satelites
-  #ifdef GYRO
-    readgyro();
-  #endif
-
+  
   #ifdef REVERSECORRECT
     digitalWrite(reverseled,!currheading.fwd);
   #endif
@@ -868,13 +869,24 @@ int parseGNVTG(const char * m)
         Serial.println(n); 
       #endif
       tempheading=currheading;//keep the current heading but fill in the compass value if we have it
+      //Serial.println(tempheading.Tracktrue);
+      
       #ifdef GYRO
+        //Serial.println("in gyro");
         sprintf(tempheading.Tracktrue,"%s",String(currgyro.yaw, 3).c_str()); //fill in true heading with compass value
+        //Serial.println(tempheading.Tracktrue);
       #endif
+      //Serial.println(tempheading.Tracktrue);
     }
     #ifdef REVERSECORRECT 
       correctreverse();
     #endif
+    //temporary
+    //sprintf(tempheading.Tracktrue,"%s",String(currgyro.yaw, 3).c_str()); //fill in true heading with compass value
+    #ifdef debug
+      Serial.println(currgyro.yaw);
+    #endif
+
     strcpy(tempheading.Trackmag,tempheading.Tracktrue); //we don't correct for magnetic declination, both are always the same
     currheading=tempheading;
 
@@ -1106,7 +1118,8 @@ void debugtest()
     }
   #endif
 
-  Serial.println("end of test code");
+  
+
 
   
 }
@@ -1169,9 +1182,15 @@ void quaternionToEuler(float qr, float qi, float qj, float qk, Gyrodata* ypr, bo
       ypr->yaw *= RAD_TO_DEG; //around z axis, right hand rule 
       ypr->pitch *= RAD_TO_DEG; //around y axis, right hand rule
       ypr->roll *= RAD_TO_DEG; //around x axis, right hand rule
+      ypr->yaw=-ypr->yaw-90; //box with antenna connector facing to front of tractor
+      //y axis of imu alligned in direction of usb connector mkrzero.
       if (ypr->yaw<0){ //if Y axis is north we get 0 or 360 (for -0), S is 180
         ypr->yaw += 360.0; //to get an angle between 0 and 360
       }
+      if (ypr->yaw>360.0){ //if Y axis is north we get 0 or 360 (for -0), S is 180
+        ypr->yaw -= 360.0; //to get an angle between 0 and 360
+      }
+
       
     }
 }
@@ -1211,7 +1230,7 @@ void readgyro(){
           Serial.println(sensorValue.un.rotationVector.k);
         #endif
         quaternionToEuler(qr, qi,  qj, qk, &currgyro, true);
-        #ifdef DEBUG
+        #ifdef DEBUGDETAIL
           Serial.print(" yaw: ");
           Serial.print(currgyro.yaw);
           Serial.print(" pitch: ");
